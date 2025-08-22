@@ -15,6 +15,11 @@ interface VanishingPoint {
   perpendicularOffset?: number;
 }
 
+interface AspectRatio {
+  name: string;
+  value: string;
+}
+
 @Component({
   selector: 'app-perspective-grid',
   standalone: true,
@@ -31,6 +36,20 @@ export class PerspectiveGridComponent implements AfterViewInit {
   private _horizonRotation: number = 0;
   lineCount: number = 10;
   showCamera: boolean = true;
+
+  // Frame overlay settings
+  aspectRatios: AspectRatio[] = [
+    { name: 'None', value: 'none' },
+    { name: '1:1', value: '1/1' },
+    { name: '16:9', value: '16/9' },
+    { name: '9:16', value: '9/16' },
+    { name: '4:3', value: '4/3' },
+    { name: '3:2', value: '3/2' },
+    { name: 'Custom', value: 'custom' }
+  ];
+  selectedAspectRatio: string = 'none';
+  customAspectRatioWidth: number = 16;
+  customAspectRatioHeight: number = 9;
 
   get horizonLevel(): number {
     return this._horizonLevel;
@@ -148,7 +167,7 @@ export class PerspectiveGridComponent implements AfterViewInit {
     const p1: VanishingPoint = {
       id: this.nextPointId++,
       x: width * 0.25,
-      y: 0, // y will be set by updateConstrainedPointsPosition
+      y: 0,
       color: this.getRandomColor(),
       isAnchored: true,
       initialXOffset: (width * 0.25) - (width / 2),
@@ -159,7 +178,7 @@ export class PerspectiveGridComponent implements AfterViewInit {
     const p2: VanishingPoint = {
       id: this.nextPointId++,
       x: width * 0.75,
-      y: 0, // y will be set by updateConstrainedPointsPosition
+      y: 0,
       color: this.getRandomColor(),
       isAnchored: true,
       initialXOffset: (width * 0.75) - (width / 2),
@@ -178,7 +197,7 @@ export class PerspectiveGridComponent implements AfterViewInit {
 
     const p1: VanishingPoint = {
       id: this.nextPointId++,
-      x: 0, // x will be set by updateConstrainedPointsPosition
+      x: 0,
       y: height * 0.25,
       color: this.getRandomColor(),
       isAnchored: false,
@@ -191,7 +210,7 @@ export class PerspectiveGridComponent implements AfterViewInit {
 
     const p2: VanishingPoint = {
       id: this.nextPointId++,
-      x: 0, // x will be set by updateConstrainedPointsPosition
+      x: 0,
       y: height * 0.75,
       color: this.getRandomColor(),
       isAnchored: false,
@@ -247,11 +266,9 @@ export class PerspectiveGridComponent implements AfterViewInit {
 
     this.vanishingPoints.forEach(point => {
       if (point.isAnchored && point.initialXOffset !== null) {
-        // Anchored to horizon
         point.x = point.initialXOffset * Math.cos(angle) + width / 2;
         point.y = point.initialXOffset * Math.sin(angle) + horizonY;
       } else if (point.isPerpendicular && point.perpendicularOffset != null) {
-        // Perpendicular to horizon
         point.x = (width / 2) + point.perpendicularOffset * Math.sin(angle);
         point.y = horizonY - point.perpendicularOffset * Math.cos(angle);
       }
@@ -271,6 +288,55 @@ export class PerspectiveGridComponent implements AfterViewInit {
 
     this.drawGrid();
     this.drawVanishingPoints();
+    this.drawFrame();
+  }
+
+  drawFrame() {
+    if (this.selectedAspectRatio === 'none') {
+      return;
+    }
+
+    const canvas = this.canvasElement.nativeElement;
+    const { width: canvasWidth, height: canvasHeight } = canvas;
+
+    let ratio;
+    if (this.selectedAspectRatio === 'custom') {
+      if (this.customAspectRatioWidth > 0 && this.customAspectRatioHeight > 0) {
+        ratio = this.customAspectRatioWidth / this.customAspectRatioHeight;
+      } else {
+        return; // Invalid custom ratio
+      }
+    } else {
+      const parts = this.selectedAspectRatio.split('/').map(Number);
+      ratio = parts[0] / parts[1];
+    }
+
+    let frameWidth = canvasWidth;
+    let frameHeight = frameWidth / ratio;
+
+    if (frameHeight > canvasHeight) {
+      frameHeight = canvasHeight;
+      frameWidth = frameHeight * ratio;
+    }
+
+    const frameX = (canvasWidth - frameWidth) / 2;
+    const frameY = (canvasHeight - frameHeight) / 2;
+
+    this.ctx.save();
+    // Draw the semi-transparent overlay
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    this.ctx.beginPath();
+    this.ctx.rect(0, 0, canvasWidth, frameY);
+    this.ctx.rect(0, frameY + frameHeight, canvasWidth, canvasHeight - (frameY + frameHeight));
+    this.ctx.rect(0, frameY, frameX, frameHeight);
+    this.ctx.rect(frameX + frameWidth, frameY, canvasWidth - (frameX + frameWidth), frameHeight);
+    this.ctx.fill();
+
+    // Draw the frame border
+    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+    this.ctx.lineWidth = 2;
+    this.ctx.strokeRect(frameX, frameY, frameWidth, frameHeight);
+    this.ctx.restore();
   }
 
   drawGrid() {
@@ -278,7 +344,6 @@ export class PerspectiveGridComponent implements AfterViewInit {
     const horizonY = height * (this.horizonLevel / 100);
     const angle = (this.horizonRotation * Math.PI) / 180;
 
-    // Draw horizon line
     this.ctx.save();
     this.ctx.strokeStyle = '#FFFF00';
     this.ctx.lineWidth = 2;
@@ -293,7 +358,6 @@ export class PerspectiveGridComponent implements AfterViewInit {
     const singlePoints = this.vanishingPoints.filter(p => p.pairId === null);
     const pairedPoints = this.vanishingPoints.filter(p => p.pairId !== null);
 
-    // Draw perpendicular guide lines for perpendicular pairs
     const perpendicularPairs = new Map<number, VanishingPoint[]>();
     pairedPoints.forEach(p => {
       if (p.isPerpendicular) {
@@ -307,7 +371,7 @@ export class PerspectiveGridComponent implements AfterViewInit {
     perpendicularPairs.forEach(pair => {
       if (pair.length === 2) {
         this.ctx.save();
-        this.ctx.strokeStyle = '#FF00FF'; // Magenta for perpendicular line
+        this.ctx.strokeStyle = '#FF00FF';
         this.ctx.lineWidth = 1;
         this.ctx.globalAlpha = 0.5;
         this.ctx.translate(width / 2, horizonY);
@@ -451,13 +515,11 @@ export class PerspectiveGridComponent implements AfterViewInit {
         const horizonY = height * (this.horizonLevel / 100);
         const angle = (this.horizonRotation * Math.PI) / 180;
 
-        // Project mouse position onto the perpendicular line
         const dx = mouseX - width / 2;
         const dy = mouseY - horizonY;
         const projectedDist = dy * Math.cos(angle) - dx * Math.sin(angle);
         point.perpendicularOffset = -projectedDist;
 
-        // Update this point and its pair
         const pair = this.vanishingPoints.filter(p => p.pairId === point.pairId);
         pair.forEach(p => {
           if (p.id !== point.id) {

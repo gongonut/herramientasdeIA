@@ -71,6 +71,21 @@
       <input id="lines" type="range" min="2" max="50" [(ngModel)]="lineCount" class="w-full">
     </div>
 
+    <div class="mb-4">
+      <h4 class="text-md font-bold mb-2">Frame Overlay</h4>
+      <div class="mb-2">
+        <label for="aspectRatio" class="block mb-1">Aspect Ratio</label>
+        <select id="aspectRatio" [(ngModel)]="selectedAspectRatio" class="w-full bg-gray-700 border border-gray-600 rounded py-1 px-2">
+          <option *ngFor="let ratio of aspectRatios" [value]="ratio.value">{{ ratio.name }}</option>
+        </select>
+      </div>
+      <div *ngIf="selectedAspectRatio === 'custom'" class="flex items-center justify-between">
+        <input type="number" [(ngModel)]="customAspectRatioWidth" class="w-1/2 bg-gray-700 border border-gray-600 rounded py-1 px-2 mr-1">
+        <span>:</span>
+        <input type="number" [(ngModel)]="customAspectRatioHeight" class="w-1/2 bg-gray-700 border border-gray-600 rounded py-1 px-2 ml-1">
+      </div>
+    </div>
+
     <button (click)="toggleCamera()" class="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
       {{ showCamera ? 'Hide' : 'Show' }} Camera
     </button>
