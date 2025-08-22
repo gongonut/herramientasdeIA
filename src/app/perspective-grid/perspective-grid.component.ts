@@ -32,7 +32,7 @@ export class PerspectiveGridComponent implements AfterViewInit {
   @ViewChild('canvasElement') canvasElement!: ElementRef<HTMLCanvasElement>;
 
   // Grid settings
-  private _horizonLevel: number = 50;
+  private _horizonLevel: number = 0; // World Y coordinate
   private _horizonRotation: number = 0;
   lineCount: number = 10;
   showCamera: boolean = true;
@@ -51,16 +51,12 @@ export class PerspectiveGridComponent implements AfterViewInit {
   customAspectRatioWidth: number = 16;
   customAspectRatioHeight: number = 9;
 
-  get horizonLevel(): number {
-    return this._horizonLevel;
-  }
-
-  set horizonLevel(value: number) {
-    if (this._horizonLevel !== value) {
-      this._horizonLevel = value;
-      this.updateConstrainedPointsPosition();
-    }
-  }
+  // Pan & Zoom
+  private scale: number = 1;
+  private panX: number = 0;
+  private panY: number = 0;
+  private isPanning: boolean = false;
+  private lastPanPosition = { x: 0, y: 0 };
 
   get horizonRotation(): number {
     return this._horizonRotation;
@@ -82,27 +78,34 @@ export class PerspectiveGridComponent implements AfterViewInit {
   public selectedPointId: number | null = null;
 
   ngAfterViewInit() {
-    this.ctx = this.canvasElement.nativeElement.getContext('2d')!;
+    const canvas = this.canvasElement.nativeElement;
+    this.ctx = canvas.getContext('2d')!;
     this.setupCanvas();
     this.startCamera();
     this.initVanishingPoints();
     this.draw();
 
-    this.canvasElement.nativeElement.addEventListener('mousedown', this.onMouseDown.bind(this));
-    this.canvasElement.nativeElement.addEventListener('mousemove', this.onMouseMove.bind(this));
-    this.canvasElement.nativeElement.addEventListener('mouseup', this.onMouseUp.bind(this));
+    canvas.addEventListener('mousedown', this.onMouseDown.bind(this));
+    canvas.addEventListener('mousemove', this.onMouseMove.bind(this));
+    canvas.addEventListener('mouseup', this.onMouseUp.bind(this));
+    canvas.addEventListener('wheel', this.onWheel.bind(this));
   }
 
   @HostListener('window:resize')
   onResize() {
     this.setupCanvas();
-    this.updateConstrainedPointsPosition();
+  }
+
+  private screenToWorld(x: number, y: number): { x: number, y: number } {
+    return { x: (x - this.panX) / this.scale, y: (y - this.panY) / this.scale };
   }
 
   setupCanvas() {
     const canvas = this.canvasElement.nativeElement;
     canvas.width = canvas.offsetWidth;
     canvas.height = canvas.offsetHeight;
+    this._horizonLevel = canvas.height / 2; // Initialize horizon in the middle of the screen
+    this.panY = this._horizonLevel;
   }
 
   async startCamera() {
@@ -146,10 +149,11 @@ export class PerspectiveGridComponent implements AfterViewInit {
 
   addPerspectivePoint() {
     const { width, height } = this.canvasElement.nativeElement;
+    const worldCenter = this.screenToWorld(width / 2, height/2);
     const newPoint: VanishingPoint = {
       id: this.nextPointId++,
-      x: width / 2,
-      y: height / 2,
+      x: worldCenter.x,
+      y: worldCenter.y,
       color: this.getRandomColor(),
       isAnchored: false,
       initialXOffset: null,
@@ -163,25 +167,28 @@ export class PerspectiveGridComponent implements AfterViewInit {
   addHorizonVPPair() {
     const { width } = this.canvasElement.nativeElement;
     const pairId = this.nextPairId++;
+    const worldCenter = { x: 0, y: this._horizonLevel };
+    const p1Offset = -width * 0.25;
+    const p2Offset = width * 0.25;
 
     const p1: VanishingPoint = {
       id: this.nextPointId++,
-      x: width * 0.25,
-      y: 0,
+      x: worldCenter.x + p1Offset,
+      y: worldCenter.y,
       color: this.getRandomColor(),
       isAnchored: true,
-      initialXOffset: (width * 0.25) - (width / 2),
+      initialXOffset: p1Offset,
       pairId: pairId,
       curvature: 0.5
     };
 
     const p2: VanishingPoint = {
       id: this.nextPointId++,
-      x: width * 0.75,
-      y: 0,
+      x: worldCenter.x + p2Offset,
+      y: worldCenter.y,
       color: this.getRandomColor(),
       isAnchored: true,
-      initialXOffset: (width * 0.75) - (width / 2),
+      initialXOffset: p2Offset,
       pairId: pairId,
       curvature: 0.5
     };
@@ -192,33 +199,35 @@ export class PerspectiveGridComponent implements AfterViewInit {
   }
 
   addPerpendicularVPPair() {
-    const { height } = this.canvasElement.nativeElement;
     const pairId = this.nextPairId++;
+    const worldCenter = { x: 0, y: this._horizonLevel };
+    const p1Offset = -200;
+    const p2Offset = 200;
 
     const p1: VanishingPoint = {
       id: this.nextPointId++,
-      x: 0,
-      y: height * 0.25,
+      x: worldCenter.x,
+      y: worldCenter.y + p1Offset,
       color: this.getRandomColor(),
       isAnchored: false,
       initialXOffset: null,
       pairId: pairId,
       curvature: 0.5,
       isPerpendicular: true,
-      perpendicularOffset: height * -0.25
+      perpendicularOffset: p1Offset
     };
 
     const p2: VanishingPoint = {
       id: this.nextPointId++,
-      x: 0,
-      y: height * 0.75,
+      x: worldCenter.x,
+      y: worldCenter.y + p2Offset,
       color: this.getRandomColor(),
       isAnchored: false,
       initialXOffset: null,
       pairId: pairId,
       curvature: 0.5,
       isPerpendicular: true,
-      perpendicularOffset: height * 0.25
+      perpendicularOffset: p2Offset
     };
 
     this.vanishingPoints.push(p1, p2);
@@ -250,9 +259,9 @@ export class PerspectiveGridComponent implements AfterViewInit {
   }
 
   toggleAnchor(point: VanishingPoint) {
-    const { width } = this.canvasElement.nativeElement;
+    const worldCenter = { x: 0, y: this._horizonLevel };
     if (point.isAnchored) {
-      point.initialXOffset = point.x - width / 2;
+      point.initialXOffset = point.x - worldCenter.x;
       this.updateConstrainedPointsPosition();
     } else {
       point.initialXOffset = null;
@@ -260,17 +269,16 @@ export class PerspectiveGridComponent implements AfterViewInit {
   }
 
   updateConstrainedPointsPosition() {
-    const { width, height } = this.canvasElement.nativeElement;
-    const horizonY = height * (this.horizonLevel / 100);
+    const worldCenter = { x: 0, y: this._horizonLevel };
     const angle = (this.horizonRotation * Math.PI) / 180;
 
     this.vanishingPoints.forEach(point => {
       if (point.isAnchored && point.initialXOffset !== null) {
-        point.x = point.initialXOffset * Math.cos(angle) + width / 2;
-        point.y = point.initialXOffset * Math.sin(angle) + horizonY;
+        point.x = worldCenter.x + point.initialXOffset * Math.cos(angle);
+        point.y = worldCenter.y + point.initialXOffset * Math.sin(angle);
       } else if (point.isPerpendicular && point.perpendicularOffset != null) {
-        point.x = (width / 2) + point.perpendicularOffset * Math.sin(angle);
-        point.y = horizonY - point.perpendicularOffset * Math.cos(angle);
+        point.x = worldCenter.x + point.perpendicularOffset * Math.sin(angle);
+        point.y = worldCenter.y - point.perpendicularOffset * Math.cos(angle);
       }
     });
   }
@@ -285,9 +293,16 @@ export class PerspectiveGridComponent implements AfterViewInit {
     if (this.showCamera && this.videoElement.nativeElement.readyState === 4) {
       this.ctx.drawImage(this.videoElement.nativeElement, 0, 0, width, height);
     }
+    
+    this.ctx.save();
+    this.ctx.translate(this.panX, this.panY);
+    this.ctx.scale(this.scale, this.scale);
 
     this.drawGrid();
     this.drawVanishingPoints();
+    
+    this.ctx.restore();
+    
     this.drawFrame();
   }
 
@@ -304,7 +319,7 @@ export class PerspectiveGridComponent implements AfterViewInit {
       if (this.customAspectRatioWidth > 0 && this.customAspectRatioHeight > 0) {
         ratio = this.customAspectRatioWidth / this.customAspectRatioHeight;
       } else {
-        return; // Invalid custom ratio
+        return;
       }
     } else {
       const parts = this.selectedAspectRatio.split('/').map(Number);
@@ -323,7 +338,6 @@ export class PerspectiveGridComponent implements AfterViewInit {
     const frameY = (canvasHeight - frameHeight) / 2;
 
     this.ctx.save();
-    // Draw the semi-transparent overlay
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     this.ctx.beginPath();
     this.ctx.rect(0, 0, canvasWidth, frameY);
@@ -332,7 +346,6 @@ export class PerspectiveGridComponent implements AfterViewInit {
     this.ctx.rect(frameX + frameWidth, frameY, canvasWidth - (frameX + frameWidth), frameHeight);
     this.ctx.fill();
 
-    // Draw the frame border
     this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
     this.ctx.lineWidth = 2;
     this.ctx.strokeRect(frameX, frameY, frameWidth, frameHeight);
@@ -341,17 +354,18 @@ export class PerspectiveGridComponent implements AfterViewInit {
 
   drawGrid() {
     const { width, height } = this.canvasElement.nativeElement;
-    const horizonY = height * (this.horizonLevel / 100);
     const angle = (this.horizonRotation * Math.PI) / 180;
+    const worldCenter = { x: 0, y: this._horizonLevel };
 
     this.ctx.save();
     this.ctx.strokeStyle = '#FFFF00';
-    this.ctx.lineWidth = 2;
-    this.ctx.translate(width / 2, horizonY);
+    this.ctx.lineWidth = 2 / this.scale;
+    this.ctx.translate(worldCenter.x, worldCenter.y);
     this.ctx.rotate(angle);
     this.ctx.beginPath();
-    this.ctx.moveTo(-width * 2, 0);
-    this.ctx.lineTo(width * 2, 0);
+    const worldWidth = width / this.scale;
+    this.ctx.moveTo(-worldWidth * 4, 0);
+    this.ctx.lineTo(worldWidth * 4, 0);
     this.ctx.stroke();
     this.ctx.restore();
 
@@ -372,13 +386,14 @@ export class PerspectiveGridComponent implements AfterViewInit {
       if (pair.length === 2) {
         this.ctx.save();
         this.ctx.strokeStyle = '#FF00FF';
-        this.ctx.lineWidth = 1;
+        this.ctx.lineWidth = 1 / this.scale;
         this.ctx.globalAlpha = 0.5;
-        this.ctx.translate(width / 2, horizonY);
+        this.ctx.translate(worldCenter.x, worldCenter.y);
         this.ctx.rotate(angle);
         this.ctx.beginPath();
-        this.ctx.moveTo(0, -height * 2);
-        this.ctx.lineTo(0, height * 2);
+        const worldHeight = height/this.scale;
+        this.ctx.moveTo(0, -worldHeight * 4);
+        this.ctx.lineTo(0, worldHeight * 4);
         this.ctx.stroke();
         this.ctx.restore();
       }
@@ -406,30 +421,40 @@ export class PerspectiveGridComponent implements AfterViewInit {
   drawLinesToPoint(vp: VanishingPoint) {
     const { width, height } = this.canvasElement.nativeElement;
     this.ctx.strokeStyle = this.selectedPointId !== null && this.selectedPointId !== vp.id ? 'gray' : vp.color;
-    this.ctx.lineWidth = 1;
+    this.ctx.lineWidth = 1 / this.scale;
 
-    for (let i = 0; i <= this.lineCount; i++) {
-      const spacing = width / this.lineCount;
-      const startPointX = i * spacing;
+    const topLeft = this.screenToWorld(0, 0);
+    const topRight = this.screenToWorld(width, 0);
+    const bottomLeft = this.screenToWorld(0, height);
+    const bottomRight = this.screenToWorld(width, height);
+
+    const lineDensity = this.lineCount;
+
+    for (let i = 0; i <= lineDensity; i++) {
+      const x = topLeft.x + (topRight.x - topLeft.x) * (i / lineDensity);
       this.ctx.beginPath();
-      this.ctx.moveTo(startPointX, 0);
-      this.ctx.lineTo(vp.x, vp.y);
-      this.ctx.stroke();
-      this.ctx.beginPath();
-      this.ctx.moveTo(startPointX, height);
+      this.ctx.moveTo(x, topLeft.y);
       this.ctx.lineTo(vp.x, vp.y);
       this.ctx.stroke();
     }
-
-    for (let i = 0; i <= this.lineCount; i++) {
-      const spacing = height / this.lineCount;
-      const startPointY = i * spacing;
+    for (let i = 0; i <= lineDensity; i++) {
+      const x = bottomLeft.x + (bottomRight.x - bottomLeft.x) * (i / lineDensity);
       this.ctx.beginPath();
-      this.ctx.moveTo(0, startPointY);
+      this.ctx.moveTo(x, bottomLeft.y);
       this.ctx.lineTo(vp.x, vp.y);
       this.ctx.stroke();
+    }
+    for (let i = 0; i <= lineDensity; i++) {
+      const y = topLeft.y + (bottomLeft.y - topLeft.y) * (i / lineDensity);
       this.ctx.beginPath();
-      this.ctx.moveTo(width, startPointY);
+      this.ctx.moveTo(topLeft.x, y);
+      this.ctx.lineTo(vp.x, vp.y);
+      this.ctx.stroke();
+    }
+    for (let i = 0; i <= lineDensity; i++) {
+      const y = topRight.y + (bottomRight.y - topRight.y) * (i / lineDensity);
+      this.ctx.beginPath();
+      this.ctx.moveTo(topRight.x, y);
       this.ctx.lineTo(vp.x, vp.y);
       this.ctx.stroke();
     }
@@ -437,7 +462,7 @@ export class PerspectiveGridComponent implements AfterViewInit {
 
   drawGeodesicGrid(p1: VanishingPoint, p2: VanishingPoint) {
     this.ctx.strokeStyle = this.selectedPointId !== null && this.selectedPointId !== p1.id && this.selectedPointId !== p2.id ? 'gray' : p1.color;
-    this.ctx.lineWidth = 1;
+    this.ctx.lineWidth = 1 / this.scale;
 
     const dx = p2.x - p1.x;
     const dy = p2.y - p1.y;
@@ -466,24 +491,30 @@ export class PerspectiveGridComponent implements AfterViewInit {
     this.vanishingPoints.forEach(vp => {
       this.ctx.fillStyle = this.selectedPointId !== null && this.selectedPointId !== vp.id ? 'gray' : vp.color;
       this.ctx.beginPath();
-      this.ctx.arc(vp.x, vp.y, 10, 0, Math.PI * 2);
+      this.ctx.arc(vp.x, vp.y, 10 / this.scale, 0, Math.PI * 2);
       this.ctx.fill();
       if (this.selectedPointId === vp.id) {
         this.ctx.strokeStyle = 'white';
-        this.ctx.lineWidth = 2;
+        this.ctx.lineWidth = 2 / this.scale;
         this.ctx.stroke();
       }
     });
   }
 
   onMouseDown(event: MouseEvent) {
-    const rect = this.canvasElement.nativeElement.getBoundingClientRect();
-    const x = event.clientX - rect.left;
-    const y = event.clientY - rect.top;
+    if (event.button === 1) {
+      this.isPanning = true;
+      this.lastPanPosition = { x: event.clientX, y: event.clientY };
+      this.canvasElement.nativeElement.classList.add('panning');
+      event.preventDefault();
+      return;
+    }
+
+    const worldPos = this.screenToWorld(event.offsetX, event.offsetY);
 
     this.vanishingPoints.forEach((vp, index) => {
-      const distance = Math.sqrt(Math.pow(vp.x - x, 2) + Math.pow(vp.y - y, 2));
-      if (distance < 10) {
+      const distance = Math.sqrt(Math.pow(vp.x - worldPos.x, 2) + Math.pow(vp.y - worldPos.y, 2));
+      if (distance < (10 / this.scale)) {
         this.draggingPointIndex = index;
         this.selectPoint(vp.id);
         this.canvasElement.nativeElement.classList.add('dragging');
@@ -492,31 +523,35 @@ export class PerspectiveGridComponent implements AfterViewInit {
   }
 
   onMouseMove(event: MouseEvent) {
-    if (this.draggingPointIndex > -1) {
-      const rect = this.canvasElement.nativeElement.getBoundingClientRect();
-      const mouseX = event.clientX - rect.left;
-      const mouseY = event.clientY - rect.top;
+    if (this.isPanning) {
+      const dx = event.clientX - this.lastPanPosition.x;
+      const dy = event.clientY - this.lastPanPosition.y;
+      this.panX += dx;
+      this.panY += dy;
+      this.lastPanPosition = { x: event.clientX, y: event.clientY };
+      return;
+    }
 
+    if (this.draggingPointIndex > -1) {
+      const worldPos = this.screenToWorld(event.offsetX, event.offsetY);
       const point = this.vanishingPoints[this.draggingPointIndex];
 
-      if (point.isAnchored) {
-        const { width, height } = this.canvasElement.nativeElement;
-        const horizonY = height * (this.horizonLevel / 100);
+      if (point.isAnchored && point.initialXOffset !== null) {
         const angle = (this.horizonRotation * Math.PI) / 180;
+        const worldCenter = { x: 0, y: this._horizonLevel };
 
-        const dx = mouseX - width / 2;
-        const dy = mouseY - horizonY;
+        const dx = worldPos.x - worldCenter.x;
+        const dy = worldPos.y - worldCenter.y;
         point.initialXOffset = dx * Math.cos(-angle) - dy * Math.sin(-angle);
 
         this.updateConstrainedPointsPosition();
 
-      } else if (point.isPerpendicular) {
-        const { width, height } = this.canvasElement.nativeElement;
-        const horizonY = height * (this.horizonLevel / 100);
+      } else if (point.isPerpendicular && point.perpendicularOffset != null) {
         const angle = (this.horizonRotation * Math.PI) / 180;
+        const worldCenter = { x: 0, y: this._horizonLevel };
 
-        const dx = mouseX - width / 2;
-        const dy = mouseY - horizonY;
+        const dx = worldPos.x - worldCenter.x;
+        const dy = worldPos.y - worldCenter.y;
         const projectedDist = dy * Math.cos(angle) - dx * Math.sin(angle);
         point.perpendicularOffset = -projectedDist;
 
@@ -530,14 +565,35 @@ export class PerspectiveGridComponent implements AfterViewInit {
         this.updateConstrainedPointsPosition();
 
       } else {
-        point.x = mouseX;
-        point.y = mouseY;
+        point.x = worldPos.x;
+        point.y = worldPos.y;
       }
     }
   }
 
   onMouseUp(event: MouseEvent) {
     this.draggingPointIndex = -1;
-    this.canvasElement.nativeElement.classList.remove('dragging');
+    this.isPanning = false;
+    this.canvasElement.nativeElement.classList.remove('dragging', 'panning');
+  }
+
+  onWheel(event: WheelEvent) {
+    event.preventDefault();
+    const scaleAmount = 1.1;
+    const mouse = { x: event.offsetX, y: event.offsetY };
+
+    const worldPosBeforeZoom = this.screenToWorld(mouse.x, mouse.y);
+
+    if (event.deltaY < 0) {
+      this.scale *= scaleAmount;
+    } else {
+      this.scale /= scaleAmount;
+    }
+    this.scale = Math.max(0.1, Math.min(this.scale, 20));
+
+    const worldPosAfterZoom = this.screenToWorld(mouse.x, mouse.y);
+
+    this.panX += (worldPosAfterZoom.x - worldPosBeforeZoom.x) * this.scale;
+    this.panY += (worldPosAfterZoom.y - worldPosBeforeZoom.y) * this.scale;
   }
 }
