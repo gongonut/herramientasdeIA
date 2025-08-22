@@ -1,0 +1,75 @@
+<div class="relative w-full h-screen bg-gray-900">
+  <video #videoElement class="absolute top-0 left-0 w-full h-full object-cover" [class.hidden]="!showCamera"></video>
+  <canvas #canvasElement class="absolute top-0 left-0 w-full h-full"></canvas>
+
+  <div class="absolute top-4 left-4 bg-gray-800 bg-opacity-75 p-4 rounded-lg text-white w-72">
+    <h3 class="text-lg font-bold mb-4">Grid Controls</h3>
+
+    <div class="mb-4">
+      <div class="flex items-center justify-between mb-2">
+        <label class="block">Perspective Points</label>
+        <div>
+          <button (click)="addPerspectivePoint()" class="bg-green-500 hover:bg-green-700 text-white font-bold py-1 px-2 rounded mr-2" title="Add Free Point">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+            </svg>
+          </button>
+          <button (click)="addHorizonVPPair()" class="bg-indigo-500 hover:bg-indigo-700 text-white font-bold py-1 px-2 rounded" title="Add Horizon VP Pair">
+            Add Horizon VP Pair
+          </button>
+        </div>
+      </div>
+      <div *ngFor="let point of vanishingPoints; let i = index" 
+           (click)="selectPoint(point.id)"
+           class="p-2 rounded mb-1 cursor-pointer"
+           [class.bg-gray-600]="selectedPointId === point.id"
+           [class.bg-gray-700]="selectedPointId !== point.id && selectedPointId !== null"
+           [class.bg-gray-800]="selectedPointId === null">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center">
+            <input type="color" [(ngModel)]="point.color" class="w-8 h-8 mr-2" (click)="$event.stopPropagation()">
+            <span>Point {{ i + 1 }}</span>
+          </div>
+          <button (click)="removePerspectivePoint(point.id); $event.stopPropagation()" class="text-red-500 hover:text-red-700">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        <div *ngIf="selectedPointId === point.id" class="mt-2">
+          <div *ngIf="point.pairId === null">
+            <label class="flex items-center">
+              <input type="checkbox" [(ngModel)]="point.isAnchored" (ngModelChange)="toggleAnchor(point)" class="mr-2">
+              <span>Anchor to Horizon</span>
+            </label>
+          </div>
+          <div *ngIf="point.pairId !== null">
+            <div class="mb-4">
+              <label for="curvature-{{point.id}}" class="block mb-2">Curvature: {{ point.curvature }}</label>
+              <input id="curvature-{{point.id}}" type="range" min="0" max="2" step="0.01" [(ngModel)]="point.curvature" class="w-full">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="mb-4">
+      <label for="horizon" class="block mb-2">Horizon Level: {{ horizonLevel }}%</label>
+      <input id="horizon" type="range" min="0" max="100" [(ngModel)]="horizonLevel" class="w-full">
+    </div>
+
+    <div class="mb-4">
+      <label for="horizonRotation" class="block mb-2">Horizon Rotation: {{ horizonRotation }}°</label>
+      <input id="horizonRotation" type="range" min="-90" max="90" [(ngModel)]="horizonRotation" class="w-full">
+    </div>
+
+    <div class="mb-4">
+      <label for="lines" class="block mb-2">Line Count: {{ lineCount }}</label>
+      <input id="lines" type="range" min="2" max="50" [(ngModel)]="lineCount" class="w-full">
+    </div>
+
+    <button (click)="toggleCamera()" class="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+      {{ showCamera ? 'Hide' : 'Show' }} Camera
+    </button>
+  </div>
+</div>

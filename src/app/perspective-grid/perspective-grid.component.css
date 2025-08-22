@@ -1,0 +1,7 @@
+canvas.dragging {
+  cursor: move;
+}
+
+.perspective-points-container {
+  margin-bottom: 1rem;
+}
