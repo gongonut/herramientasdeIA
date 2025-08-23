@@ -1,8 +1,8 @@
-<div class="relative w-full h-screen bg-gray-900">
+<div class="relative w-full h-screen" [ngClass]="{'bg-gray-900': theme === 'dark', 'bg-gray-100': theme === 'light'}">
   <video #videoElement class="absolute top-0 left-0 w-full h-full object-cover" [class.hidden]="!showCamera"></video>
   <canvas #canvasElement class="absolute top-0 left-0 w-full h-full"></canvas>
 
-  <div class="absolute top-4 left-4 bg-gray-800 bg-opacity-75 p-4 rounded-lg text-white w-72">
+  <div class="absolute top-4 left-4 bg-opacity-75 p-4 rounded-lg w-72" [ngClass]="{'bg-gray-800 text-white': theme === 'dark', 'bg-white text-black shadow-lg': theme === 'light'}">
     <h3 class="text-lg font-bold mb-4">Grid Controls</h3>
 
     <div class="mb-4">
@@ -25,9 +25,14 @@
       <div *ngFor="let point of vanishingPoints; let i = index" 
            (click)="selectPoint(point.id)"
            class="p-2 rounded mb-1 cursor-pointer"
-           [class.bg-gray-600]="selectedPointId === point.id"
-           [class.bg-gray-700]="selectedPointId !== point.id && selectedPointId !== null"
-           [class.bg-gray-800]="selectedPointId === null">
+           [ngClass]="{
+             'bg-gray-600': selectedPointId === point.id && theme === 'dark',
+             'bg-gray-700': selectedPointId !== point.id && selectedPointId !== null && theme === 'dark',
+             'bg-gray-800': selectedPointId === null && theme === 'dark',
+             'bg-blue-200': selectedPointId === point.id && theme === 'light',
+             'bg-gray-200': selectedPointId !== point.id && selectedPointId !== null && theme === 'light',
+             'bg-white': selectedPointId === null && theme === 'light'
+            }">
         <div class="flex items-center justify-between">
           <div class="flex items-center">
             <input type="color" [(ngModel)]="point.color" class="w-8 h-8 mr-2" (click)="$event.stopPropagation()">
@@ -70,19 +75,23 @@
       <h4 class="text-md font-bold mb-2">Frame Overlay</h4>
       <div class="mb-2">
         <label for="aspectRatio" class="block mb-1">Aspect Ratio</label>
-        <select id="aspectRatio" [(ngModel)]="selectedAspectRatio" class="w-full bg-gray-700 border border-gray-600 rounded py-1 px-2">
+        <select id="aspectRatio" [(ngModel)]="selectedAspectRatio" class="w-full rounded py-1 px-2" [ngClass]="{'bg-gray-700 border border-gray-600': theme === 'dark', 'bg-gray-200 border border-gray-300': theme === 'light'}">
           <option *ngFor="let ratio of aspectRatios" [value]="ratio.value">{{ ratio.name }}</option>
         </select>
       </div>
       <div *ngIf="selectedAspectRatio === 'custom'" class="flex items-center justify-between">
-        <input type="number" [(ngModel)]="customAspectRatioWidth" class="w-1/2 bg-gray-700 border border-gray-600 rounded py-1 px-2 mr-1">
+        <input type="number" [(ngModel)]="customAspectRatioWidth" class="w-1/2 rounded py-1 px-2 mr-1" [ngClass]="{'bg-gray-700 border border-gray-600': theme === 'dark', 'bg-gray-200 border border-gray-300': theme === 'light'}">
         <span>:</span>
-        <input type="number" [(ngModel)]="customAspectRatioHeight" class="w-1/2 bg-gray-700 border border-gray-600 rounded py-1 px-2 ml-1">
+        <input type="number" [(ngModel)]="customAspectRatioHeight" class="w-1/2 rounded py-1 px-2 ml-1" [ngClass]="{'bg-gray-700 border border-gray-600': theme === 'dark', 'bg-gray-200 border border-gray-300': theme === 'light'}">
       </div>
     </div>
 
-    <button (click)="toggleCamera()" class="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+    <button (click)="toggleCamera()" class="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-2">
       {{ showCamera ? 'Hide' : 'Show' }} Camera
+    </button>
+    
+    <button (click)="toggleTheme()" class="w-full font-bold py-2 px-4 rounded" [ngClass]="{'bg-gray-600 hover:bg-gray-500': theme === 'dark', 'bg-gray-300 hover:bg-gray-400': theme === 'light'}">
+      Switch to {{ theme === 'dark' ? 'Light' : 'Dark' }} Theme
     </button>
   </div>
 </div>

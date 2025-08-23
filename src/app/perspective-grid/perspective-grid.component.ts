@@ -28,6 +28,7 @@ interface AspectRatio {
   styleUrls: ['./perspective-grid.component.css']
 })
 export class PerspectiveGridComponent implements AfterViewInit {
+  public theme: 'light' | 'dark' = 'dark';
   @ViewChild('videoElement') videoElement!: ElementRef<HTMLVideoElement>;
   @ViewChild('canvasElement') canvasElement!: ElementRef<HTMLCanvasElement>;
 
@@ -595,5 +596,9 @@ export class PerspectiveGridComponent implements AfterViewInit {
 
     this.panX += (worldPosAfterZoom.x - worldPosBeforeZoom.x) * this.scale;
     this.panY += (worldPosAfterZoom.y - worldPosBeforeZoom.y) * this.scale;
+  }
+
+  toggleTheme() {
+    this.theme = this.theme === 'light' ? 'dark' : 'light';
   }
 }
