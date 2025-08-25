@@ -2,96 +2,110 @@
   <video #videoElement class="absolute top-0 left-0 w-full h-full object-cover" [class.hidden]="!showCamera"></video>
   <canvas #canvasElement class="absolute top-0 left-0 w-full h-full"></canvas>
 
-  <div class="absolute top-4 left-4 bg-opacity-75 p-4 rounded-lg w-72" [ngClass]="{'bg-gray-800 text-white': theme === 'dark', 'bg-white text-black shadow-lg': theme === 'light'}">
-    <h3 class="text-lg font-bold mb-4">Grid Controls</h3>
+  <div class="absolute top-4 left-4 z-10">
+    <button (click)="gridControlsCollapsed = !gridControlsCollapsed" 
+            class="bg-opacity-75 p-2 rounded-full mb-2"
+            [ngClass]="{'bg-gray-800 text-white': theme === 'dark', 'bg-white text-black shadow-lg': theme === 'light'}">
+      <svg *ngIf="gridControlsCollapsed" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+      </svg>
+      <svg *ngIf="!gridControlsCollapsed" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+      </svg>
+    </button>
 
-    <div class="mb-4">
-      <div class="flex items-center justify-between mb-2">
-        <label class="block">Perspective Points</label>
-        <div>
-          <button (click)="addPerspectivePoint()" class="bg-green-500 hover:bg-green-700 text-white font-bold py-1 px-2 rounded mr-2" title="Add Free Point">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-            </svg>
-          </button>
-          <button (click)="addHorizonVPPair()" class="bg-indigo-500 hover:bg-indigo-700 text-white font-bold py-1 px-2 rounded" title="Add Horizon VP Pair">
-            Add Horizon VP Pair
-          </button>
-          <button (click)="addPerpendicularVPPair()" class="bg-purple-500 hover:bg-purple-700 text-white font-bold py-1 px-2 rounded mt-2" title="Add Perpendicular VP Pair">
-            Add Perpendicular VP Pair
-          </button>
-        </div>
-      </div>
-      <div *ngFor="let point of vanishingPoints; let i = index" 
-           (click)="selectPoint(point.id)"
-           class="p-2 rounded mb-1 cursor-pointer"
-           [ngClass]="{
-             'bg-gray-600': selectedPointId === point.id && theme === 'dark',
-             'bg-gray-700': selectedPointId !== point.id && selectedPointId !== null && theme === 'dark',
-             'bg-gray-800': selectedPointId === null && theme === 'dark',
-             'bg-blue-200': selectedPointId === point.id && theme === 'light',
-             'bg-gray-200': selectedPointId !== point.id && selectedPointId !== null && theme === 'light',
-             'bg-white': selectedPointId === null && theme === 'light'
-            }">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center">
-            <input type="color" [(ngModel)]="point.color" class="w-8 h-8 mr-2" (click)="$event.stopPropagation()">
-            <span>Point {{ i + 1 }}</span>
+    <div *ngIf="!gridControlsCollapsed" class="bg-opacity-75 p-4 rounded-lg w-72" [ngClass]="{'bg-gray-800 text-white': theme === 'dark', 'bg-white text-black shadow-lg': theme === 'light'}">
+      <h3 class="text-lg font-bold mb-4">Panel de Controles</h3>
+
+      <div class="mb-4">
+        <div class="flex items-center justify-between mb-2">
+          <label class="block">Puntos de Perspectiva</label>
+          <div>
+            <button (click)="addPerspectivePoint()" class="bg-green-500 hover:bg-green-700 text-white font-bold py-1 px-2 rounded mr-2" title="Añadir Punto Libre">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+              </svg>
+            </button>
           </div>
-          <button (click)="removePerspectivePoint(point.id); $event.stopPropagation()" class="text-red-500 hover:text-red-700">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
         </div>
-        <div *ngIf="selectedPointId === point.id" class="mt-2">
-          <div *ngIf="point.pairId === null">
-            <label class="flex items-center">
-              <input type="checkbox" [(ngModel)]="point.isAnchored" (ngModelChange)="toggleAnchor(point)" class="mr-2">
-              <span>Anchor to Horizon</span>
-            </label>
+        <div *ngFor="let point of vanishingPoints; let i = index" 
+             (click)="selectPoint(point.id)"
+             class="p-2 rounded mb-1 cursor-pointer"
+             [ngClass]="{
+               'bg-gray-600': selectedPointId === point.id && theme === 'dark',
+               'bg-gray-700': selectedPointId !== point.id && selectedPointId !== null && theme === 'dark',
+               'bg-gray-800': selectedPointId === null && theme === 'dark',
+               'bg-blue-200': selectedPointId === point.id && theme === 'light',
+               'bg-gray-200': selectedPointId !== point.id && selectedPointId !== null && theme === 'light',
+               'bg-white': selectedPointId === null && theme === 'light'
+              }">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center">
+              <input type="color" [(ngModel)]="point.color" class="w-8 h-8 mr-2" (click)="$event.stopPropagation()">
+              <span>Punto {{ i + 1 }}</span>
+            </div>
+            <button (click)="removePerspectivePoint(point.id); $event.stopPropagation()" class="text-red-500 hover:text-red-700">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
-          <div *ngIf="point.pairId !== null">
-            <div class="mb-4">
-              <label for="curvature-{{point.id}}" class="block mb-2">Curvature: {{ point.curvature }}</label>
-              <input id="curvature-{{point.id}}" type="range" min="0" max="2" step="0.01" [(ngModel)]="point.curvature" class="w-full">
+          <div *ngIf="selectedPointId === point.id" class="mt-2">
+            <div *ngIf="point.pairId === null">
+              <label class="flex items-center">
+                <input type="checkbox" [(ngModel)]="point.isAnchored" (ngModelChange)="toggleAnchor(point)" class="mr-2">
+                <span>Anclar al Horizonte</span>
+              </label>
+            </div>
+            <div *ngIf="point.pairId !== null">
+              <div class="mb-4">
+                <label for="curvature-{{point.id}}" class="block mb-2">Curvatura: {{ point.curvature }}</label>
+                <input id="curvature-{{point.id}}" type="range" min="0" max="2" step="0.01" [(ngModel)]="point.curvature" class="w-full">
+              </div>
             </div>
           </div>
         </div>
+        <hr class="my-4 border-gray-600">
+        <button (click)="addHorizonVPPair()" class="bg-indigo-500 hover:bg-indigo-700 text-white font-bold py-1 px-2 rounded" title="Añadir par de PV en horizonte">
+          Añadir par de PV en horizonte
+        </button>
+        <button (click)="addPerpendicularVPPair()" class="bg-purple-500 hover:bg-purple-700 text-white font-bold py-1 px-2 rounded mt-2" title="Añadir par de PV perpendicular">
+          Añadir par de PV perpendicular
+        </button>
       </div>
-    </div>
 
-    <div class="mb-4">
-      <label for="horizonRotation" class="block mb-2">Horizon Rotation: {{ horizonRotation }}°</label>
-      <input id="horizonRotation" type="range" min="-90" max="90" [(ngModel)]="horizonRotation" class="w-full">
-    </div>
-
-    <div class="mb-4">
-      <label for="lines" class="block mb-2">Line Count: {{ lineCount }}</label>
-      <input id="lines" type="range" min="2" max="50" [(ngModel)]="lineCount" class="w-full">
-    </div>
-
-    <div class="mb-4">
-      <h4 class="text-md font-bold mb-2">Frame Overlay</h4>
-      <div class="mb-2">
-        <label for="aspectRatio" class="block mb-1">Aspect Ratio</label>
-        <select id="aspectRatio" [(ngModel)]="selectedAspectRatio" class="w-full rounded py-1 px-2" [ngClass]="{'bg-gray-700 border border-gray-600': theme === 'dark', 'bg-gray-200 border border-gray-300': theme === 'light'}">
-          <option *ngFor="let ratio of aspectRatios" [value]="ratio.value">{{ ratio.name }}</option>
-        </select>
+      <div class="mb-4">
+        <label for="horizonRotation" class="block mb-2">Rotación del Horizonte: {{ horizonRotation }}°</label>
+        <input id="horizonRotation" type="range" min="-90" max="90" [(ngModel)]="horizonRotation" class="w-full">
       </div>
-      <div *ngIf="selectedAspectRatio === 'custom'" class="flex items-center justify-between">
-        <input type="number" [(ngModel)]="customAspectRatioWidth" class="w-1/2 rounded py-1 px-2 mr-1" [ngClass]="{'bg-gray-700 border border-gray-600': theme === 'dark', 'bg-gray-200 border border-gray-300': theme === 'light'}">
-        <span>:</span>
-        <input type="number" [(ngModel)]="customAspectRatioHeight" class="w-1/2 rounded py-1 px-2 ml-1" [ngClass]="{'bg-gray-700 border border-gray-600': theme === 'dark', 'bg-gray-200 border border-gray-300': theme === 'light'}">
-      </div>
-    </div>
 
-    <button (click)="toggleCamera()" class="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-2">
-      {{ showCamera ? 'Hide' : 'Show' }} Camera
-    </button>
-    
-    <button (click)="toggleTheme()" class="w-full font-bold py-2 px-4 rounded" [ngClass]="{'bg-gray-600 hover:bg-gray-500': theme === 'dark', 'bg-gray-300 hover:bg-gray-400': theme === 'light'}">
-      Switch to {{ theme === 'dark' ? 'Light' : 'Dark' }} Theme
-    </button>
+      <div class="mb-4">
+        <label for="lines" class="block mb-2">Cantidad de Líneas: {{ lineCount }}</label>
+        <input id="lines" type="range" min="2" max="50" [(ngModel)]="lineCount" class="w-full">
+      </div>
+
+      <div class="mb-4">
+        <h4 class="text-md font-bold mb-2">Superposición de Marco</h4>
+        <div class="mb-2">
+          <label for="aspectRatio" class="block mb-1">Relación de Aspecto</label>
+          <select id="aspectRatio" [(ngModel)]="selectedAspectRatio" class="w-full rounded py-1 px-2" [ngClass]="{'bg-gray-700 border border-gray-600': theme === 'dark', 'bg-gray-200 border border-gray-300': theme === 'light'}">
+            <option *ngFor="let ratio of aspectRatios" [value]="ratio.value">{{ ratio.name }}</option>
+          </select>
+        </div>
+        <div *ngIf="selectedAspectRatio === 'custom'" class="flex items-center justify-between">
+          <input type="number" [(ngModel)]="customAspectRatioWidth" class="w-1/2 rounded py-1 px-2 mr-1" [ngClass]="{'bg-gray-700 border border-gray-600': theme === 'dark', 'bg-gray-200 border border-gray-300': theme === 'light'}">
+          <span>:</span>
+          <input type="number" [(ngModel)]="customAspectRatioHeight" class="w-1/2 rounded py-1 px-2 ml-1" [ngClass]="{'bg-gray-700 border border-gray-600': theme === 'dark', 'bg-gray-200 border border-gray-300': theme === 'light'}">
+        </div>
+      </div>
+
+      <button (click)="toggleCamera()" class="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-2">
+        {{ showCamera ? 'Ocultar' : 'Mostrar' }} Cámara
+      </button>
+      
+      <button (click)="toggleTheme()" class="w-full font-bold py-2 px-4 rounded" [ngClass]="{'bg-gray-600 hover:bg-gray-500': theme === 'dark', 'bg-gray-300 hover:bg-gray-400': theme === 'light'}">
+        Cambiar a Tema {{ theme === 'dark' ? 'Claro' : 'Oscuro' }}
+      </button>
+    </div>
   </div>
 </div>

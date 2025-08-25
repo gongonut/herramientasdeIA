@@ -1,11 +1,7 @@
-canvas.dragging {
-  cursor: move;
-}
-
-canvas.panning {
+.panning {
   cursor: grabbing;
 }
 
-.perspective-points-container {
-  margin-bottom: 1rem;
+.dragging {
+  cursor: move;
 }

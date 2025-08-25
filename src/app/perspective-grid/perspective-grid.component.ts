@@ -28,6 +28,7 @@ interface AspectRatio {
   styleUrls: ['./perspective-grid.component.css']
 })
 export class PerspectiveGridComponent implements AfterViewInit {
+  public gridControlsCollapsed = false;
   public theme: 'light' | 'dark' = 'dark';
   @ViewChild('videoElement') videoElement!: ElementRef<HTMLVideoElement>;
   @ViewChild('canvasElement') canvasElement!: ElementRef<HTMLCanvasElement>;
