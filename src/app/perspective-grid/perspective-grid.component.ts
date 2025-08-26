@@ -1,7 +1,7 @@
 import { Component, ElementRef, ViewChild, AfterViewInit, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 
 interface VanishingPoint {
   id: number;
@@ -14,6 +14,11 @@ interface VanishingPoint {
   curvature: number;
   isPerpendicular?: boolean;
   perpendicularOffset?: number;
+}
+
+interface FramePoint {
+  x: number;
+  y: number;
 }
 
 interface AspectRatio {
@@ -66,6 +71,10 @@ export class PerspectiveGridComponent implements AfterViewInit {
   private lastPanPosition = { x: 0, y: 0 };
   private initialPinchDistance: number = 0;
 
+  // Frame dragging
+  private isDraggingFrame: boolean = false;
+  private lastFrameDragPosition = { x: 0, y: 0 };
+
   get horizonRotation(): number {
     return this._horizonRotation;
   }
@@ -80,12 +89,14 @@ export class PerspectiveGridComponent implements AfterViewInit {
   private ctx!: CanvasRenderingContext2D;
   private videoStream!: MediaStream;
   public vanishingPoints: VanishingPoint[] = [];
+  public framePoints: FramePoint[] = [];
   private draggingPointIndex: number = -1;
+  private draggingFramePointIndex: number = -1;
   private nextPointId: number = 0;
   private nextPairId: number = 0;
   public selectedPointId: number | null = null;
 
-  constructor(private elementRef: ElementRef) {}
+  constructor(private elementRef: ElementRef, private router: Router) {}
 
   ngAfterViewInit() {
     const canvas = this.canvasElement.nativeElement;
@@ -93,6 +104,7 @@ export class PerspectiveGridComponent implements AfterViewInit {
     this.setupCanvas();
     this.startCamera();
     this.initVanishingPoints();
+    this.initFramePoints();
     this.draw();
 
     canvas.addEventListener('mousedown', this.onMouseDown.bind(this));
@@ -160,6 +172,20 @@ export class PerspectiveGridComponent implements AfterViewInit {
     if (this.vanishingPoints.length === 0) {
       this.addPerspectivePoint();
     }
+  }
+
+  initFramePoints() {
+    const { width, height } = this.canvasElement.nativeElement;
+    const worldCenter = this.screenToWorld(width / 2, height / 2);
+    const frameWidth = width / 2 / this.scale;
+    const frameHeight = height / 2 / this.scale;
+
+    this.framePoints = [
+      { x: worldCenter.x - frameWidth / 2, y: worldCenter.y - frameHeight / 2 },
+      { x: worldCenter.x + frameWidth / 2, y: worldCenter.y - frameHeight / 2 },
+      { x: worldCenter.x + frameWidth / 2, y: worldCenter.y + frameHeight / 2 },
+      { x: worldCenter.x - frameWidth / 2, y: worldCenter.y + frameHeight / 2 },
+    ];
   }
 
   getRandomColor() {
@@ -274,6 +300,37 @@ export class PerspectiveGridComponent implements AfterViewInit {
     }
   }
 
+  onAspectRatioChange() {
+    if (this.selectedAspectRatio === 'none') {
+      this.framePoints = [];
+      return;
+    }
+    
+    let ratio;
+    if (this.selectedAspectRatio === 'custom') {
+      if (this.customAspectRatioWidth > 0 && this.customAspectRatioHeight > 0) {
+        ratio = this.customAspectRatioWidth / this.customAspectRatioHeight;
+      } else {
+        return;
+      }
+    } else {
+      const parts = this.selectedAspectRatio.split('/').map(Number);
+      ratio = parts[0] / parts[1];
+    }
+
+    const { width, height } = this.canvasElement.nativeElement;
+    const worldCenter = this.screenToWorld(width / 2, height / 2);
+    const frameWidth = 300 / this.scale; // A fixed size in world pixels
+    const frameHeight = frameWidth / ratio;
+
+    this.framePoints = [
+      { x: worldCenter.x - frameWidth / 2, y: worldCenter.y - frameHeight / 2 },
+      { x: worldCenter.x + frameWidth / 2, y: worldCenter.y - frameHeight / 2 },
+      { x: worldCenter.x + frameWidth / 2, y: worldCenter.y + frameHeight / 2 },
+      { x: worldCenter.x - frameWidth / 2, y: worldCenter.y + frameHeight / 2 },
+    ];
+  }
+
   selectPoint(id: number) {
     if (this.selectedPointId === id) {
       this.selectedPointId = null;
@@ -324,61 +381,150 @@ export class PerspectiveGridComponent implements AfterViewInit {
 
     this.drawGrid();
     this.drawVanishingPoints();
+    this.drawPerspectiveFrame();
     
     this.ctx.restore();
     
-    this.drawFrame();
+    this.drawFrameOverlay();
   }
 
-  drawFrame() {
-    if (this.selectedAspectRatio === 'none') {
+  drawPerspectiveFrame() {
+    if (this.selectedAspectRatio === 'none' || this.framePoints.length !== 4) {
+      return;
+    }
+
+    // Draw the frame lines
+    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+    this.ctx.lineWidth = 2 / this.scale;
+    this.ctx.beginPath();
+    this.ctx.moveTo(this.framePoints[0].x, this.framePoints[0].y);
+    for (let i = 1; i <= this.framePoints.length; i++) {
+      this.ctx.lineTo(this.framePoints[i % this.framePoints.length].x, this.framePoints[i % this.framePoints.length].y);
+    }
+    this.ctx.stroke();
+
+    // Draw the handles
+    this.framePoints.forEach(fp => {
+      this.ctx.fillStyle = 'white';
+      this.ctx.beginPath();
+      this.ctx.arc(fp.x, fp.y, 8 / this.scale, 0, Math.PI * 2);
+      this.ctx.fill();
+    });
+  }
+
+  drawFrameOverlay() {
+    if (this.selectedAspectRatio === 'none' || this.framePoints.length !== 4) {
       return;
     }
 
     const canvas = this.canvasElement.nativeElement;
-    const { width: canvasWidth, height: canvasHeight } = canvas;
-    const margin = 10;
+    const { width, height } = canvas;
 
-    let ratio;
-    if (this.selectedAspectRatio === 'custom') {
-      if (this.customAspectRatioWidth > 0 && this.customAspectRatioHeight > 0) {
-        ratio = this.customAspectRatioWidth / this.customAspectRatioHeight;
-      } else {
-        return;
-      }
-    } else {
-      const parts = this.selectedAspectRatio.split('/').map(Number);
-      ratio = parts[0] / parts[1];
-    }
-
-    let availableWidth = canvasWidth - margin * 2;
-    let availableHeight = canvasHeight - margin * 2;
-
-    let frameWidth = availableWidth;
-    let frameHeight = frameWidth / ratio;
-
-    if (frameHeight > availableHeight) {
-      frameHeight = availableHeight;
-      frameWidth = frameHeight * ratio;
-    }
-
-    const frameX = (canvasWidth - frameWidth) / 2;
-    const frameY = (canvasHeight - frameHeight) / 2;
+    // Transform world coordinates of frame points to screen coordinates
+    const screenFramePoints = this.framePoints.map(p => ({
+      x: p.x * this.scale + this.panX,
+      y: p.y * this.scale + this.panY
+    }));
 
     this.ctx.save();
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     this.ctx.beginPath();
-    // Areas outside the frame
-    this.ctx.rect(0, 0, canvasWidth, frameY);
-    this.ctx.rect(0, frameY + frameHeight, canvasWidth, canvasHeight - (frameY + frameHeight));
-    this.ctx.rect(0, frameY, frameX, frameHeight);
-    this.ctx.rect(frameX + frameWidth, frameY, canvasWidth - (frameX + frameWidth), frameHeight);
-    this.ctx.fill();
+    this.ctx.moveTo(0, 0);
+    this.ctx.lineTo(width, 0);
+    this.ctx.lineTo(width, height);
+    this.ctx.lineTo(0, height);
+    this.ctx.closePath();
 
-    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-    this.ctx.lineWidth = 2;
-    this.ctx.strokeRect(frameX, frameY, frameWidth, frameHeight);
+    // Create a hole in the overlay with the shape of the frame
+    this.ctx.moveTo(screenFramePoints[0].x, screenFramePoints[0].y);
+    for (let i = 1; i < screenFramePoints.length; i++) {
+      this.ctx.lineTo(screenFramePoints[i].x, screenFramePoints[i].y);
+    }
+    this.ctx.closePath();
+    this.ctx.fill('evenodd');
     this.ctx.restore();
+  }
+
+  isPointInFrame(p: { x: number, y: number }): boolean {
+    if (this.framePoints.length !== 4) return false;
+
+    const p0 = this.framePoints[0];
+    const p1 = this.framePoints[1];
+    const p2 = this.framePoints[2];
+    const p3 = this.framePoints[3];
+
+    const sign1 = (p1.x - p0.x) * (p.y - p0.y) - (p1.y - p0.y) * (p.x - p0.x);
+    const sign2 = (p2.x - p1.x) * (p.y - p1.y) - (p2.y - p1.y) * (p.x - p1.x);
+    const sign3 = (p3.x - p2.x) * (p.y - p2.y) - (p3.y - p2.y) * (p.x - p2.x);
+    const sign4 = (p0.x - p3.x) * (p.y - p3.y) - (p0.y - p3.y) * (p.x - p3.x);
+
+    const has_neg = (sign1 < 0) || (sign2 < 0) || (sign3 < 0) || (sign4 < 0);
+    const has_pos = (sign1 > 0) || (sign2 > 0) || (sign3 > 0) || (sign4 > 0);
+
+    return !(has_neg && has_pos);
+  }
+
+  private getFrameImageDataUrl(): string | null {
+    if (this.framePoints.length !== 4) {
+      return null;
+    }
+
+    const outputCanvas = document.createElement('canvas');
+    const outputCtx = outputCanvas.getContext('2d');
+
+    if (!outputCtx) {
+      console.error("Could not create output canvas context");
+      return null;
+    }
+
+    const screenFramePoints = this.framePoints.map(p => ({
+      x: p.x * this.scale + this.panX,
+      y: p.y * this.scale + this.panY
+    }));
+
+    const xs = screenFramePoints.map(p => p.x);
+    const ys = screenFramePoints.map(p => p.y);
+    const minX = Math.min(...xs);
+    const minY = Math.min(...ys);
+    const maxX = Math.max(...xs);
+    const maxY = Math.max(...ys);
+
+    const width = maxX - minX;
+    const height = maxY - minY;
+
+    outputCanvas.width = width;
+    outputCanvas.height = height;
+
+    outputCtx.beginPath();
+    outputCtx.moveTo(screenFramePoints[0].x - minX, screenFramePoints[0].y - minY);
+    for (let i = 1; i < screenFramePoints.length; i++) {
+      outputCtx.lineTo(screenFramePoints[i].x - minX, screenFramePoints[i].y - minY);
+    }
+    outputCtx.closePath();
+    outputCtx.clip();
+
+    outputCtx.drawImage(this.canvasElement.nativeElement, -minX, -minY);
+
+    return outputCanvas.toDataURL('image/png');
+  }
+
+  recordFrame() {
+    const dataUrl = this.getFrameImageDataUrl();
+    if (dataUrl) {
+      const link = document.createElement('a');
+      link.href = dataUrl;
+      link.download = 'perspective-frame.png';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  }
+
+  shareFrame() {
+    const dataUrl = this.getFrameImageDataUrl();
+    if (dataUrl) {
+      this.router.navigate(['/camara-lucida-digital'], { state: { image: dataUrl } });
+    }
   }
 
   drawGrid() {
@@ -549,6 +695,25 @@ export class PerspectiveGridComponent implements AfterViewInit {
 
     const worldPos = this.screenToWorld(event.offsetX, event.offsetY);
 
+    if (this.selectedAspectRatio !== 'none') {
+      for (let i = 0; i < this.framePoints.length; i++) {
+        const fp = this.framePoints[i];
+        const distance = Math.sqrt(Math.pow(fp.x - worldPos.x, 2) + Math.pow(fp.y - worldPos.y, 2));
+        if (distance < (10 / this.scale)) {
+          this.draggingFramePointIndex = i;
+          this.canvasElement.nativeElement.classList.add('dragging');
+          return; // Exit after finding a point
+        }
+      }
+
+      if (this.isPointInFrame(worldPos)) {
+        this.isDraggingFrame = true;
+        this.lastFrameDragPosition = worldPos;
+        this.canvasElement.nativeElement.classList.add('dragging');
+        return;
+      }
+    }
+
     this.vanishingPoints.forEach((vp, index) => {
       const distance = Math.sqrt(Math.pow(vp.x - worldPos.x, 2) + Math.pow(vp.y - worldPos.y, 2));
       if (distance < (10 / this.scale)) {
@@ -566,6 +731,63 @@ export class PerspectiveGridComponent implements AfterViewInit {
       this.panX += dx;
       this.panY += dy;
       this.lastPanPosition = { x: event.clientX, y: event.clientY };
+      return;
+    }
+
+    if (this.isDraggingFrame) {
+      const worldPos = this.screenToWorld(event.offsetX, event.offsetY);
+      const dx = worldPos.x - this.lastFrameDragPosition.x;
+      const dy = worldPos.y - this.lastFrameDragPosition.y;
+
+      this.framePoints.forEach(p => {
+        p.x += dx;
+        p.y += dy;
+      });
+
+      this.lastFrameDragPosition = worldPos;
+      return;
+    }
+
+    if (this.draggingFramePointIndex > -1) {
+      const worldPos = this.screenToWorld(event.offsetX, event.offsetY);
+
+      if (this.framePoints.length === 4) {
+        const center = {
+          x: (this.framePoints[0].x + this.framePoints[1].x + this.framePoints[2].x + this.framePoints[3].x) / 4,
+          y: (this.framePoints[0].y + this.framePoints[1].y + this.framePoints[2].y + this.framePoints[3].y) / 4
+        };
+
+        const originalPointToDrag = this.framePoints[this.draggingFramePointIndex];
+
+        const originalVector = {
+          x: originalPointToDrag.x - center.x,
+          y: originalPointToDrag.y - center.y
+        };
+
+        const newVector = {
+          x: worldPos.x - center.x,
+          y: worldPos.y - center.y
+        };
+
+        const originalDist = Math.sqrt(originalVector.x * originalVector.x + originalVector.y * originalVector.y);
+        const newDist = Math.sqrt(newVector.x * newVector.x + newVector.y * newVector.y);
+
+        if (originalDist > 0) {
+          const scale = newDist / originalDist;
+          const originalPoints = JSON.parse(JSON.stringify(this.framePoints));
+
+          this.framePoints.forEach((point, index) => {
+            const vector = {
+              x: originalPoints[index].x - center.x,
+              y: originalPoints[index].y - center.y
+            };
+            this.framePoints[index] = {
+              x: center.x + vector.x * scale,
+              y: center.y + vector.y * scale
+            };
+          });
+        }
+      }
       return;
     }
 
@@ -610,6 +832,8 @@ export class PerspectiveGridComponent implements AfterViewInit {
 
   onMouseUp(event: MouseEvent) {
     this.draggingPointIndex = -1;
+    this.draggingFramePointIndex = -1;
+    this.isDraggingFrame = false;
     this.isPanning = false;
     this.canvasElement.nativeElement.classList.remove('dragging', 'panning');
   }

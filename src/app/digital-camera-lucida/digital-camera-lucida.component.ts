@@ -1,6 +1,6 @@
 import { Component, ElementRef, OnInit, ViewChild, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 
 @Component({
@@ -53,10 +53,21 @@ export class DigitalCameraLucidaComponent implements OnInit {
   private initialHeight = 0;
   private initialPinchDistance: number = 0;
 
-  constructor(private elementRef: ElementRef) {}
+  constructor(private elementRef: ElementRef, private router: Router) {}
 
   ngOnInit(): void {
     this.startCamera();
+    const navigation = this.router.getCurrentNavigation();
+    const state = navigation?.extras.state as { image: string };
+    if (state && state.image) {
+      const img = new Image();
+      img.onload = () => {
+        this.imageAspectRatio = img.naturalWidth / img.naturalHeight;
+        this.imageUrl = state.image;
+        setTimeout(() => this.resetImageState(), 0);
+      };
+      img.src = state.image;
+    }
   }
 
   @HostListener('document:click', ['$event'])

@@ -101,7 +101,7 @@
         <h4 class="text-md font-bold mb-2">Superposición de Marco</h4>
         <div class="mb-2">
           <label for="aspectRatio" class="block mb-1">Relación de Aspecto</label>
-          <select id="aspectRatio" [(ngModel)]="selectedAspectRatio" class="w-full rounded py-1 px-2" [ngClass]="{'bg-gray-700 border border-gray-600': theme === 'dark', 'bg-gray-200 border border-gray-300': theme === 'light'}">
+          <select id="aspectRatio" [(ngModel)]="selectedAspectRatio" (ngModelChange)="onAspectRatioChange()" class="w-full rounded py-1 px-2" [ngClass]="{'bg-gray-700 border border-gray-600': theme === 'dark', 'bg-gray-200 border border-gray-300': theme === 'light'}">
             <option *ngFor="let ratio of aspectRatios" [value]="ratio.value">{{ ratio.name }}</option>
           </select>
         </div>
@@ -109,6 +109,18 @@
           <input type="number" [(ngModel)]="customAspectRatioWidth" class="w-1/2 rounded py-1 px-2 mr-1" [ngClass]="{'bg-gray-700 border border-gray-600': theme === 'dark', 'bg-gray-200 border border-gray-300': theme === 'light'}">
           <span>:</span>
           <input type="number" [(ngModel)]="customAspectRatioHeight" class="w-1/2 rounded py-1 px-2 ml-1" [ngClass]="{'bg-gray-700 border border-gray-600': theme === 'dark', 'bg-gray-200 border border-gray-300': theme === 'light'}">
+        </div>
+        <div class="flex mt-2 space-x-2">
+          <button (click)="recordFrame()" 
+                  *ngIf="selectedAspectRatio !== 'none'"
+                  class="w-1/2 bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
+            Grabar
+          </button>
+          <button (click)="shareFrame()" 
+                  *ngIf="selectedAspectRatio !== 'none'"
+                  class="w-1/2 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+            Compartir
+          </button>
         </div>
       </div>
 
