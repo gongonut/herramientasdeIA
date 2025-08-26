@@ -3,7 +3,7 @@
   <canvas #canvasElement class="absolute top-0 left-0 w-full h-full"></canvas>
 
   <div class="absolute top-4 left-4 z-10">
-    <button (click)="gridControlsCollapsed = !gridControlsCollapsed" 
+    <button #toggleButton (click)="gridControlsCollapsed = !gridControlsCollapsed" 
             class="bg-opacity-75 p-2 rounded-full mb-2"
             [ngClass]="{'bg-gray-800 text-white': theme === 'dark', 'bg-white text-black shadow-lg': theme === 'light'}">
       <svg *ngIf="gridControlsCollapsed" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -14,7 +14,7 @@
       </svg>
     </button>
 
-    <div *ngIf="!gridControlsCollapsed" class="bg-opacity-75 p-4 rounded-lg w-72" [ngClass]="{'bg-gray-800 text-white': theme === 'dark', 'bg-white text-black shadow-lg': theme === 'light'}">
+    <div #controlsPanel *ngIf="!gridControlsCollapsed" class="bg-opacity-75 p-4 rounded-lg w-72" [ngClass]="{'bg-gray-800 text-white': theme === 'dark', 'bg-white text-black shadow-lg': theme === 'light'}">
       <button routerLink="/" class="flex items-center text-lg font-bold mb-4 w-full text-left p-2 rounded-lg shadow-md" [ngClass]="{'bg-gray-700 hover:bg-gray-600 text-white': theme === 'dark', 'bg-gray-200 hover:bg-gray-300 text-black': theme === 'light'}">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
@@ -87,6 +87,14 @@
       <div class="mb-4">
         <label for="lines" class="block mb-2">Cantidad de Líneas: {{ lineCount }}</label>
         <input id="lines" type="range" min="2" max="50" [(ngModel)]="lineCount" class="w-full">
+        <div class="mt-2 flex justify-between">
+          <button (click)="toggleParallelLines()" class="w-1/2 bg-sky-500 hover:bg-sky-700 text-white font-bold py-2 px-4 rounded mr-1" [class.bg-sky-700]="drawParallel">
+            Paralelas
+          </button>
+          <button (click)="togglePerpendicularLines()" class="w-1/2 bg-teal-500 hover:bg-teal-700 text-white font-bold py-2 px-4 rounded ml-1" [class.bg-teal-700]="drawPerpendicular">
+            Perpendiculares
+          </button>
+        </div>
       </div>
 
       <div class="mb-4">

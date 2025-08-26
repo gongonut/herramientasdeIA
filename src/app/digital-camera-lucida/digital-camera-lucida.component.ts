@@ -20,6 +20,8 @@ export class DigitalCameraLucidaComponent implements OnInit {
   @ViewChild('videoElement') videoElement!: ElementRef<HTMLVideoElement>;
   @ViewChild('overlayContainer') overlayContainer!: ElementRef<HTMLDivElement>;
   @ViewChild('guideContainer') guideContainer!: ElementRef<HTMLDivElement>;
+  @ViewChild('toggleButton') toggleButton!: ElementRef<HTMLButtonElement>;
+  @ViewChild('controlsPanel') controlsPanel!: ElementRef<HTMLDivElement>;
 
   // Image state
   public imageUrl: string | ArrayBuffer | null = null;
@@ -49,9 +51,26 @@ export class DigitalCameraLucidaComponent implements OnInit {
   private initialTargetY = 0;
   private initialWidth = 0;
   private initialHeight = 0;
+  private initialPinchDistance: number = 0;
+
+  constructor(private elementRef: ElementRef) {}
 
   ngOnInit(): void {
     this.startCamera();
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    if (this.controlsCollapsed) {
+      return;
+    }
+    const target = event.target as HTMLElement;
+    if (this.toggleButton?.nativeElement.contains(target)) {
+      return;
+    }
+    if (this.controlsPanel && !this.controlsPanel.nativeElement.contains(target)) {
+      this.controlsCollapsed = true;
+    }
   }
 
   startCamera() {
@@ -219,6 +238,100 @@ export class DigitalCameraLucidaComponent implements OnInit {
     this.isResizing = false;
     this.dragTarget = null;
     this.resizeHandle = null;
+  }
+
+  @HostListener('document:touchmove', ['$event'])
+  onTouchMove(event: TouchEvent) {
+    if (!this.dragTarget) return;
+
+    if (event.touches.length === 1 && this.isDragging) {
+        const dx = event.touches[0].clientX - this.initialMouseX;
+        const dy = event.touches[0].clientY - this.initialMouseY;
+        const newPosX = this.initialTargetX + dx;
+        const newPosY = this.initialTargetY + dy;
+        if (this.dragTarget === 'image') {
+            this.imagePosX = newPosX;
+            this.imagePosY = newPosY;
+        } else {
+            this.guidePosX = newPosX;
+            this.guidePosY = newPosY;
+        }
+    } else if (event.touches.length === 2 && this.isResizing) {
+        const newDist = this.getDistance(event.touches);
+        const scale = newDist / this.initialPinchDistance;
+
+        let newWidth = this.initialWidth * scale;
+        let newHeight = this.initialHeight * scale;
+
+        const aspectRatio = this.dragTarget === 'image' ? this.imageAspectRatio : this.guideAspectRatio;
+        if ((this.dragTarget === 'image' && this.preserveAspectRatio) || (this.dragTarget === 'guide' && this.preserveGuideAspectRatio)) {
+            newHeight = newWidth / aspectRatio;
+        }
+
+        const newPosX = this.initialTargetX - (newWidth - this.initialWidth) / 2;
+        const newPosY = this.initialTargetY - (newHeight - this.initialHeight) / 2;
+
+        if (this.dragTarget === 'image') {
+            this.imagePosX = newPosX;
+            this.imagePosY = newPosY;
+            if (this.overlayContainer) {
+                this.overlayContainer.nativeElement.style.width = `${newWidth}px`;
+                this.overlayContainer.nativeElement.style.height = `${newHeight}px`;
+            }
+        } else {
+            this.guidePosX = newPosX;
+            this.guidePosY = newPosY;
+            this.guideWidth = newWidth;
+            this.guideHeight = newHeight;
+        }
+    }
+    event.preventDefault();
+  }
+
+  @HostListener('document:touchend')
+  onTouchEnd() {
+    this.isDragging = false;
+    this.isResizing = false;
+    this.dragTarget = null;
+    this.initialPinchDistance = 0;
+  }
+
+  onTouchStart(event: TouchEvent, target: 'image' | 'guide') {
+    if (event.touches.length === 1) {
+        this.isDragging = true;
+        this.dragTarget = target;
+        this.initialMouseX = event.touches[0].clientX;
+        this.initialMouseY = event.touches[0].clientY;
+        if (target === 'image') {
+            this.initialTargetX = this.imagePosX;
+            this.initialTargetY = this.imagePosY;
+        } else {
+            this.initialTargetX = this.guidePosX;
+            this.initialTargetY = this.guidePosY;
+        }
+        event.preventDefault();
+    } else if (event.touches.length === 2) {
+        this.isResizing = true;
+        this.dragTarget = target;
+        this.initialPinchDistance = this.getDistance(event.touches);
+        const container = target === 'image' ? this.overlayContainer.nativeElement : this.guideContainer.nativeElement;
+        this.initialWidth = container.offsetWidth;
+        this.initialHeight = container.offsetHeight;
+        if (target === 'image') {
+            this.initialTargetX = this.imagePosX;
+            this.initialTargetY = this.imagePosY;
+        } else {
+            this.initialTargetX = this.guidePosX;
+            this.initialTargetY = this.guidePosY;
+        }
+        event.preventDefault();
+    }
+  }
+
+  private getDistance(touches: TouchList): number {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
   }
 
   onTemplateChange(template: string) {

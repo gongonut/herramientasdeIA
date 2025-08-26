@@ -33,12 +33,16 @@ export class PerspectiveGridComponent implements AfterViewInit {
   public theme: 'light' | 'dark' = 'dark';
   @ViewChild('videoElement') videoElement!: ElementRef<HTMLVideoElement>;
   @ViewChild('canvasElement') canvasElement!: ElementRef<HTMLCanvasElement>;
+  @ViewChild('toggleButton') toggleButton!: ElementRef<HTMLButtonElement>;
+  @ViewChild('controlsPanel') controlsPanel!: ElementRef<HTMLDivElement>;
 
   // Grid settings
   private _horizonLevel: number = 0; // World Y coordinate
   private _horizonRotation: number = 0;
   lineCount: number = 10;
   showCamera: boolean = true;
+  drawParallel: boolean = false;
+  drawPerpendicular: boolean = false;
 
   // Frame overlay settings
   aspectRatios: AspectRatio[] = [
@@ -60,6 +64,7 @@ export class PerspectiveGridComponent implements AfterViewInit {
   private panY: number = 0;
   private isPanning: boolean = false;
   private lastPanPosition = { x: 0, y: 0 };
+  private initialPinchDistance: number = 0;
 
   get horizonRotation(): number {
     return this._horizonRotation;
@@ -80,6 +85,8 @@ export class PerspectiveGridComponent implements AfterViewInit {
   private nextPairId: number = 0;
   public selectedPointId: number | null = null;
 
+  constructor(private elementRef: ElementRef) {}
+
   ngAfterViewInit() {
     const canvas = this.canvasElement.nativeElement;
     this.ctx = canvas.getContext('2d')!;
@@ -92,6 +99,20 @@ export class PerspectiveGridComponent implements AfterViewInit {
     canvas.addEventListener('mousemove', this.onMouseMove.bind(this));
     canvas.addEventListener('mouseup', this.onMouseUp.bind(this));
     canvas.addEventListener('wheel', this.onWheel.bind(this));
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    if (this.gridControlsCollapsed) {
+      return;
+    }
+    const target = event.target as HTMLElement;
+    if (this.toggleButton?.nativeElement.contains(target)) {
+      return;
+    }
+    if (this.controlsPanel && !this.controlsPanel.nativeElement.contains(target)) {
+      this.gridControlsCollapsed = true;
+    }
   }
 
   @HostListener('window:resize')
@@ -377,6 +398,14 @@ export class PerspectiveGridComponent implements AfterViewInit {
     this.ctx.stroke();
     this.ctx.restore();
 
+    if (this.drawParallel) {
+      this.drawParallelLines();
+    }
+
+    if (this.drawPerpendicular) {
+      this.drawPerpendicularLines();
+    }
+
     const singlePoints = this.vanishingPoints.filter(p => p.pairId === null);
     const pairedPoints = this.vanishingPoints.filter(p => p.pairId !== null);
 
@@ -605,7 +634,188 @@ export class PerspectiveGridComponent implements AfterViewInit {
     this.panY += (worldPosAfterZoom.y - worldPosBeforeZoom.y) * this.scale;
   }
 
+  private getDistance(touches: TouchList): number {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  onTouchStart(event: TouchEvent) {
+    if (event.touches.length === 1) {
+      const touch = event.touches[0];
+      const rect = this.canvasElement.nativeElement.getBoundingClientRect();
+      const mouseX = touch.clientX - rect.left;
+      const mouseY = touch.clientY - rect.top;
+      const worldPos = this.screenToWorld(mouseX, mouseY);
+
+      let pointFound = false;
+      this.vanishingPoints.forEach((vp, index) => {
+        const distance = Math.sqrt(Math.pow(vp.x - worldPos.x, 2) + Math.pow(vp.y - worldPos.y, 2));
+        if (distance < (20 / this.scale)) { // Increased touch area
+          this.draggingPointIndex = index;
+          this.selectPoint(vp.id);
+          this.canvasElement.nativeElement.classList.add('dragging');
+          pointFound = true;
+        }
+      });
+
+      if (!pointFound) {
+        this.isPanning = true;
+        this.lastPanPosition = { x: touch.clientX, y: touch.clientY };
+        this.canvasElement.nativeElement.classList.add('panning');
+      }
+      event.preventDefault();
+    } else if (event.touches.length === 2) {
+      // Handle pinch to zoom
+      this.isPanning = false; // Stop panning when zooming
+      this.initialPinchDistance = this.getDistance(event.touches);
+    }
+  }
+
+  onTouchMove(event: TouchEvent) {
+    if (event.touches.length === 1) {
+      const touch = event.touches[0];
+      if (this.isPanning) {
+        const dx = touch.clientX - this.lastPanPosition.x;
+        const dy = touch.clientY - this.lastPanPosition.y;
+        this.panX += dx;
+        this.panY += dy;
+        this.lastPanPosition = { x: touch.clientX, y: touch.clientY };
+      } else if (this.draggingPointIndex > -1) {
+        const rect = this.canvasElement.nativeElement.getBoundingClientRect();
+        const mouseX = touch.clientX - rect.left;
+        const mouseY = touch.clientY - rect.top;
+        const worldPos = this.screenToWorld(mouseX, mouseY);
+        const point = this.vanishingPoints[this.draggingPointIndex];
+
+        if (point.isAnchored && point.initialXOffset !== null) {
+          const angle = (this.horizonRotation * Math.PI) / 180;
+          const worldCenter = { x: 0, y: this._horizonLevel };
+
+          const dx = worldPos.x - worldCenter.x;
+          const dy = worldPos.y - worldCenter.y;
+          point.initialXOffset = dx * Math.cos(-angle) - dy * Math.sin(-angle);
+
+          this.updateConstrainedPointsPosition();
+
+        } else if (point.isPerpendicular && point.perpendicularOffset != null) {
+          const angle = (this.horizonRotation * Math.PI) / 180;
+          const worldCenter = { x: 0, y: this._horizonLevel };
+
+          const dx = worldPos.x - worldCenter.x;
+          const dy = worldPos.y - worldCenter.y;
+          const projectedDist = dy * Math.cos(angle) - dx * Math.sin(angle);
+          point.perpendicularOffset = -projectedDist;
+
+          const pair = this.vanishingPoints.filter(p => p.pairId === point.pairId);
+          pair.forEach(p => {
+            if (p.id !== point.id) {
+              p.perpendicularOffset = -point.perpendicularOffset!;
+            }
+          });
+
+          this.updateConstrainedPointsPosition();
+
+        } else {
+          point.x = worldPos.x;
+          point.y = worldPos.y;
+        }
+      }
+    } else if (event.touches.length === 2) {
+      // Handle pinch to zoom
+      const newDist = this.getDistance(event.touches);
+      const scaleAmount = newDist / this.initialPinchDistance;
+      
+      const rect = this.canvasElement.nativeElement.getBoundingClientRect();
+      const center = {
+        x: ((event.touches[0].clientX + event.touches[1].clientX) / 2) - rect.left,
+        y: ((event.touches[0].clientY + event.touches[1].clientY) / 2) - rect.top
+      };
+
+      const worldPosBeforeZoom = this.screenToWorld(center.x, center.y);
+      this.scale *= scaleAmount;
+      this.scale = Math.max(0.1, Math.min(this.scale, 20));
+      const worldPosAfterZoom = this.screenToWorld(center.x, center.y);
+
+      this.panX += (worldPosAfterZoom.x - worldPosBeforeZoom.x) * this.scale;
+      this.panY += (worldPosAfterZoom.y - worldPosBeforeZoom.y) * this.scale;
+
+      this.initialPinchDistance = newDist;
+    }
+    event.preventDefault();
+  }
+
+  onTouchEnd(event: TouchEvent) {
+    this.draggingPointIndex = -1;
+    this.isPanning = false;
+    this.canvasElement.nativeElement.classList.remove('dragging', 'panning');
+    if (event.touches.length < 2) {
+        this.initialPinchDistance = 0;
+    }
+  }
+
   toggleTheme() {
     this.theme = this.theme === 'light' ? 'dark' : 'light';
+  }
+
+  toggleParallelLines() {
+    this.drawParallel = !this.drawParallel;
+  }
+
+  togglePerpendicularLines() {
+    this.drawPerpendicular = !this.drawPerpendicular;
+  }
+
+  drawParallelLines() {
+    const { width, height } = this.canvasElement.nativeElement;
+    const angle = (this.horizonRotation * Math.PI) / 180;
+    const worldCenter = { x: 0, y: this._horizonLevel };
+
+    this.ctx.save();
+    this.ctx.strokeStyle = '#00FFFF';
+    this.ctx.lineWidth = 1 / this.scale;
+    this.ctx.translate(worldCenter.x, worldCenter.y);
+    this.ctx.rotate(angle);
+
+    const worldHeight = height / this.scale;
+    const lineSpacing = worldHeight / this.lineCount;
+    const worldWidth = width / this.scale;
+
+    for (let i = -this.lineCount; i <= this.lineCount; i++) {
+      if (i === 0) continue;
+      const y = i * lineSpacing;
+      this.ctx.beginPath();
+      this.ctx.moveTo(-worldWidth * 4, y);
+      this.ctx.lineTo(worldWidth * 4, y);
+      this.ctx.stroke();
+    }
+
+    this.ctx.restore();
+  }
+
+  drawPerpendicularLines() {
+    const { width, height } = this.canvasElement.nativeElement;
+    const angle = (this.horizonRotation * Math.PI) / 180;
+    const worldCenter = { x: 0, y: this._horizonLevel };
+
+    this.ctx.save();
+    this.ctx.strokeStyle = '#FF00FF';
+    this.ctx.lineWidth = 1 / this.scale;
+    this.ctx.translate(worldCenter.x, worldCenter.y);
+    this.ctx.rotate(angle);
+
+    const worldWidth = width / this.scale;
+    const lineSpacing = worldWidth / this.lineCount;
+    const worldHeight = height / this.scale;
+
+    for (let i = -this.lineCount; i <= this.lineCount; i++) {
+      const x = i * lineSpacing;
+      this.ctx.beginPath();
+      this.ctx.moveTo(x, -worldHeight * 4);
+      this.ctx.lineTo(x, worldHeight * 4);
+      this.ctx.stroke();
+    }
+
+    this.ctx.restore();
   }
 }

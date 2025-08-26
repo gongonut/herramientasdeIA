@@ -62,7 +62,8 @@
   <div #overlayContainer *ngIf="imageUrl"
        class="absolute select-none z-10"
        [style.transform]="'translate(' + imagePosX + 'px, ' + imagePosY + 'px)'"
-       (mousedown)="onDragStart($event, 'image')">
+       (mousedown)="onDragStart($event, 'image')"
+       (touchstart)="onTouchStart($event, 'image')">
     <img #overlayImage [src]="imageUrl"
          class="w-full h-full object-contain pointer-events-none"
          [style.opacity]="opacity">
@@ -74,7 +75,7 @@
 
   <!-- Controls -->
   <div class="absolute top-4 left-4 z-20">
-    <button (click)="controlsCollapsed = !controlsCollapsed" 
+    <button #toggleButton (click)="controlsCollapsed = !controlsCollapsed" 
             class="bg-opacity-75 p-2 rounded-full mb-2"
             [ngClass]="{'bg-gray-800 text-white': true, 'bg-white text-black shadow-lg': false}">
       <svg *ngIf="controlsCollapsed" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -85,7 +86,7 @@
       </svg>
     </button>
 
-    <div *ngIf="!controlsCollapsed" class="bg-opacity-75 p-4 rounded-lg w-72" [ngClass]="{'bg-gray-800 text-white': true, 'bg-white text-black shadow-lg': false}">
+    <div #controlsPanel *ngIf="!controlsCollapsed" class="bg-opacity-75 p-4 rounded-lg w-72" [ngClass]="{'bg-gray-800 text-white': true, 'bg-white text-black shadow-lg': false}">
       <button routerLink="/" class="flex items-center text-lg font-bold mb-4 w-full text-left p-2 rounded-lg shadow-md bg-gray-700 hover:bg-gray-600 text-white">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
