@@ -1,11 +1,11 @@
 import { Component } from '@angular/core';
-import { PerspectiveGridComponent } from './perspective-grid/perspective-grid.component';
+import { RouterOutlet } from '@angular/router';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [PerspectiveGridComponent],
-  template: '<app-perspective-grid></app-perspective-grid>',
+  imports: [RouterOutlet],
+  template: '<router-outlet></router-outlet>',
 })
 export class AppComponent {
   title = 'PerspectiveIA';

@@ -15,7 +15,12 @@
     </button>
 
     <div *ngIf="!gridControlsCollapsed" class="bg-opacity-75 p-4 rounded-lg w-72" [ngClass]="{'bg-gray-800 text-white': theme === 'dark', 'bg-white text-black shadow-lg': theme === 'light'}">
-      <h3 class="text-lg font-bold mb-4">Panel de Controles</h3>
+      <button routerLink="/" class="flex items-center text-lg font-bold mb-4 w-full text-left p-2 rounded-lg shadow-md" [ngClass]="{'bg-gray-700 hover:bg-gray-600 text-white': theme === 'dark', 'bg-gray-200 hover:bg-gray-300 text-black': theme === 'light'}">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+        <span>Menú/Asistente de Perspectiva</span>
+      </button>
 
       <div class="mb-4">
         <div class="flex items-center justify-between mb-2">
@@ -106,6 +111,7 @@
       <button (click)="toggleTheme()" class="w-full font-bold py-2 px-4 rounded" [ngClass]="{'bg-gray-600 hover:bg-gray-500': theme === 'dark', 'bg-gray-300 hover:bg-gray-400': theme === 'light'}">
         Cambiar a Tema {{ theme === 'dark' ? 'Claro' : 'Oscuro' }}
       </button>
+      
     </div>
   </div>
 </div>

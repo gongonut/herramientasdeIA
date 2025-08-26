@@ -1,6 +1,7 @@
 import { Component, ElementRef, ViewChild, AfterViewInit, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 
 interface VanishingPoint {
   id: number;
@@ -23,7 +24,7 @@ interface AspectRatio {
 @Component({
   selector: 'app-perspective-grid',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './perspective-grid.component.html',
   styleUrls: ['./perspective-grid.component.css']
 })
@@ -315,6 +316,7 @@ export class PerspectiveGridComponent implements AfterViewInit {
 
     const canvas = this.canvasElement.nativeElement;
     const { width: canvasWidth, height: canvasHeight } = canvas;
+    const margin = 10;
 
     let ratio;
     if (this.selectedAspectRatio === 'custom') {
@@ -328,11 +330,14 @@ export class PerspectiveGridComponent implements AfterViewInit {
       ratio = parts[0] / parts[1];
     }
 
-    let frameWidth = canvasWidth;
+    let availableWidth = canvasWidth - margin * 2;
+    let availableHeight = canvasHeight - margin * 2;
+
+    let frameWidth = availableWidth;
     let frameHeight = frameWidth / ratio;
 
-    if (frameHeight > canvasHeight) {
-      frameHeight = canvasHeight;
+    if (frameHeight > availableHeight) {
+      frameHeight = availableHeight;
       frameWidth = frameHeight * ratio;
     }
 
@@ -342,6 +347,7 @@ export class PerspectiveGridComponent implements AfterViewInit {
     this.ctx.save();
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
     this.ctx.beginPath();
+    // Areas outside the frame
     this.ctx.rect(0, 0, canvasWidth, frameY);
     this.ctx.rect(0, frameY + frameHeight, canvasWidth, canvasHeight - (frameY + frameHeight));
     this.ctx.rect(0, frameY, frameX, frameHeight);
