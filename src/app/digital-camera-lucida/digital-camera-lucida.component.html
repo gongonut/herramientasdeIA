@@ -1,44 +1,79 @@
 <div class="relative w-full h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
   <video #videoElement autoplay playsinline class="absolute top-0 left-0 w-full h-full object-cover"></video>
-  
-  <div class="absolute top-0 left-0 w-full h-full pointer-events-none z-10">
-    <svg *ngIf="selectedTemplate === 'thirds'" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none">
-      <line x1="33.33" y1="0" x2="33.33" y2="100" stroke="white" stroke-width="1"/>
-      <line x1="66.66" y1="0" x2="66.66" y2="100" stroke="white" stroke-width="1"/>
-      <line x1="0" y1="33.33" x2="100" y2="33.33" stroke="white" stroke-width="1"/>
-      <line x1="0" y1="66.66" x2="100" y2="66.66" stroke="white" stroke-width="1"/>
-    </svg>
-    <svg *ngIf="selectedTemplate === 'golden-ratio'" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
-      <path d="M 50,50 m -50,0 a 50,50 0 1,0 100,0 a 50,50 0 1,0 -100,0" fill="none" stroke="white" stroke-width="1"/>
-      <path d="M 50,50 m 0,-50 v 100" fill="none" stroke="white" stroke-width="1"/>
-      <path d="M 50,50 m -50,0 h 100" fill="none" stroke="white" stroke-width="1"/>
-      <path d="M 21.4,21.4 m 57.2,0 a 28.6,28.6 0 1,0 -57.2,0 a 28.6,28.6 0 1,0 57.2,0" fill="none" stroke="white" stroke-width="1"/>
-      <path d="M 50,50 m -28.6,28.6 a 14.3,14.3 0 1,0 28.6,0 a 14.3,14.3 0 1,0 -28.6,0" fill="none" stroke="white" stroke-width="1"/>
-    </svg>
-    <svg *ngIf="selectedTemplate === 'symmetry'" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none">
-      <line x1="50" y1="0" x2="50" y2="100" stroke="white" stroke-width="1"/>
-      <line x1="0" y1="50" x2="100" y2="50" stroke="white" stroke-width="1"/>
-    </svg>
-    <svg *ngIf="selectedTemplate === 'diagonals'" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none">
-      <line x1="0" y1="0" x2="100" y2="100" stroke="white" stroke-width="1"/>
-      <line x1="0" y1="100" x2="100" y2="0" stroke="white" stroke-width="1"/>
-    </svg>
-  </div>
-  
-  <div #overlayContainer *ngIf="imageUrl" 
-       class="absolute top-0 left-0 w-full h-full select-none"
-       [style.transform]="'translate(' + posX + 'px, ' + posY + 'px)'"
-       (mousedown)="onDragStart($event)">
-    <img #overlayImage [src]="imageUrl" 
-         class="w-full h-full object-contain pointer-events-none"
-         [style.opacity]="opacity">
-    <div class="resize-handle top-left" (mousedown)="onResizeStart($event, 'top-left')"></div>
-    <div class="resize-handle top-right" (mousedown)="onResizeStart($event, 'top-right')"></div>
-    <div class="resize-handle bottom-left" (mousedown)="onResizeStart($event, 'bottom-left')"></div>
-    <div class="resize-handle bottom-right" (mousedown)="onResizeStart($event, 'bottom-right')"></div>
+
+  <!-- Guide Container -->
+  <div #guideContainer *ngIf="selectedTemplate !== 'none'"
+       class="absolute select-none z-5"
+       [style.transform]="'translate(' + guidePosX + 'px, ' + guidePosY + 'px)'"
+       [style.width.px]="guideWidth"
+       [style.height.px]="guideHeight"
+       (mousedown)="onDragStart($event, 'guide')">
+
+    <div [ngSwitch]="selectedTemplate" class="w-full h-full">
+      <svg *ngSwitchCase="'thirds'" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <line x1="33.33" y1="0" x2="33.33" y2="100" [attr.stroke]="guideColor" stroke-width="0.5"/>
+        <line x1="66.66" y1="0" x2="66.66" y2="100" [attr.stroke]="guideColor" stroke-width="0.5"/>
+        <line x1="0" y1="33.33" x2="100" y2="33.33" [attr.stroke]="guideColor" stroke-width="0.5"/>
+        <line x1="0" y1="66.66" x2="100" y2="66.66" [attr.stroke]="guideColor" stroke-width="0.5"/>
+      </svg>
+      <svg *ngSwitchCase="'golden-ratio'" width="100%" height="100%" viewBox="0 0 162 100" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+        <path fill="none" [attr.stroke]="guideColor" stroke-width="0.5"
+              d="M 62,0
+                 A 62,62 0 0,1 124,62
+                 A 38,38 0 0,1 86,100
+                 A 24,24 0 0,1 62,76
+                 A 14,14 0 0,1 76,62
+                 A 8,8 0 0,1 68,54
+                 A 6,6 0 0,1 62,60
+                 A 2,2 0 0,1 60,62" />
+      </svg>
+      <svg *ngSwitchCase="'symmetry'" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <line x1="50" y1="0" x2="50" y2="100" [attr.stroke]="guideColor" stroke-width="0.5"/>
+        <line x1="0" y1="50" x2="100" y2="50" [attr.stroke]="guideColor" stroke-width="0.5"/>
+      </svg>
+      <svg *ngSwitchCase="'diagonals'" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <line x1="0" y1="0" x2="100" y2="100" [attr.stroke]="guideColor" stroke-width="0.5"/>
+        <line x1="0" y1="100" x2="100" y2="0" [attr.stroke]="guideColor" stroke-width="0.5"/>
+      </svg>
+      <svg *ngSwitchCase="'radial'" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
+        <line x1="50" y1="0" x2="50" y2="100" [attr.stroke]="guideColor" stroke-width="0.5"/>
+        <line x1="0" y1="50" x2="100" y2="50" [attr.stroke]="guideColor" stroke-width="0.5"/>
+        <line x1="0" y1="0" x2="100" y2="100" [attr.stroke]="guideColor" stroke-width="0.5"/>
+        <line x1="0" y1="100" x2="100" y2="0" [attr.stroke]="guideColor" stroke-width="0.5"/>
+      </svg>
+      <svg *ngSwitchCase="'golden-triangle'" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 95.1" preserveAspectRatio="xMidYMid meet">
+        <polygon points="50,0 0,95.1 100,95.1" fill="none" [attr.stroke]="guideColor" stroke-width="0.5"/>
+      </svg>
+      <svg *ngSwitchCase="'golden-section'" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 161.8 100" preserveAspectRatio="none">
+        <line x1="61.8" y1="0" x2="61.8" y2="100" [attr.stroke]="guideColor" stroke-width="0.5"/>
+        <line x1="100" y1="0" x2="100" y2="100" [attr.stroke]="guideColor" stroke-width="0.5"/>
+        <line x1="0" y1="38.2" x2="161.8" y2="38.2" [attr.stroke]="guideColor" stroke-width="0.5"/>
+        <line x1="0" y1="61.8" x2="161.8" y2="61.8" [attr.stroke]="guideColor" stroke-width="0.5"/>
+      </svg>
+    </div>
+
+    <div class="resize-handle top-left" (mousedown)="onResizeStart($event, 'top-left', 'guide')"></div>
+    <div class="resize-handle top-right" (mousedown)="onResizeStart($event, 'top-right', 'guide')"></div>
+    <div class="resize-handle bottom-left" (mousedown)="onResizeStart($event, 'bottom-left', 'guide')"></div>
+    <div class="resize-handle bottom-right" (mousedown)="onResizeStart($event, 'bottom-right', 'guide')"></div>
   </div>
 
-  <div class="absolute top-4 left-4 z-10">
+  <!-- Image Container -->
+  <div #overlayContainer *ngIf="imageUrl"
+       class="absolute select-none z-10"
+       [style.transform]="'translate(' + imagePosX + 'px, ' + imagePosY + 'px)'"
+       (mousedown)="onDragStart($event, 'image')">
+    <img #overlayImage [src]="imageUrl"
+         class="w-full h-full object-contain pointer-events-none"
+         [style.opacity]="opacity">
+    <div class="resize-handle top-left" (mousedown)="onResizeStart($event, 'top-left', 'image')"></div>
+    <div class="resize-handle top-right" (mousedown)="onResizeStart($event, 'top-right', 'image')"></div>
+    <div class="resize-handle bottom-left" (mousedown)="onResizeStart($event, 'bottom-left', 'image')"></div>
+    <div class="resize-handle bottom-right" (mousedown)="onResizeStart($event, 'bottom-right', 'image')"></div>
+  </div>
+
+  <!-- Controls -->
+  <div class="absolute top-4 left-4 z-20">
     <button (click)="controlsCollapsed = !controlsCollapsed" 
             class="bg-opacity-75 p-2 rounded-full mb-2"
             [ngClass]="{'bg-gray-800 text-white': true, 'bg-white text-black shadow-lg': false}">
@@ -59,8 +94,16 @@
       </button>
       
       <div class="mb-4">
-        <label for="image-upload" class="block mb-2">Cargar Imagen</label>
-        <input id="image-upload" type="file" (change)="onFileSelected($event)" accept="image/*" class="w-full">
+        <label for="image-upload" class="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded cursor-pointer inline-block text-center">
+          Seleccionar archivo
+        </label>
+        <input id="image-upload" type="file" (change)="onFileSelected($event)" accept="image/*" class="hidden">
+      </div>
+
+      <div *ngIf="imageUrl" class="mb-4">
+        <button (click)="removeImage()" class="w-full bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
+          Eliminar Imagen
+        </button>
       </div>
 
       <div class="mb-4">
@@ -77,13 +120,35 @@
 
       <div class="mb-4">
         <label for="composition-template" class="block mb-2">Guía de Composición</label>
-        <select id="composition-template" [(ngModel)]="selectedTemplate" class="w-full rounded py-1 px-2" [ngClass]="{'bg-gray-700 border border-gray-600': true, 'bg-gray-200 border border-gray-300': false}">
+        <select id="composition-template" [(ngModel)]="selectedTemplate" (ngModelChange)="onTemplateChange($event)" class="w-full rounded py-1 px-2" [ngClass]="{'bg-gray-700 border border-gray-600': true, 'bg-gray-200 border border-gray-300': false}">
           <option value="none">Ninguna</option>
           <option value="thirds">Regla de los Tercios</option>
           <option value="golden-ratio">Proporción Áurea</option>
           <option value="symmetry">Simetría Vertical y Horizontal</option>
           <option value="diagonals">Diagonales</option>
+          <option value="radial">Radial</option>
+          <option value="golden-triangle">Triángulo Áureo</option>
+          <option value="golden-section">Sección Áurea</option>
         </select>
+      </div>
+
+      <div class="mb-4">
+        <label class="flex items-center">
+          <input type="checkbox" [(ngModel)]="preserveGuideAspectRatio" class="mr-2">
+          <span>Conservar Proporción de Guía</span>
+        </label>
+      </div>
+
+      <div class="mb-4">
+        <label class="flex items-center">
+          <input type="checkbox" [(ngModel)]="smartAlignment" class="mr-2">
+          <span>Alineamiento inteligente de la imagen</span>
+        </label>
+      </div>
+
+      <div class="mb-4">
+        <label for="guide-color" class="block mb-2">Color de Guía</label>
+        <input id="guide-color" type="color" [(ngModel)]="guideColor" class="w-full h-10 p-1 rounded cursor-pointer" [ngClass]="{'bg-gray-700 border border-gray-600': true, 'bg-gray-200 border border-gray-300': false}">
       </div>
     </div>
   </div>

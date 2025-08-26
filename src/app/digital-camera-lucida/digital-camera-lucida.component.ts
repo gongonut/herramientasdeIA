@@ -11,30 +11,42 @@ import { FormsModule } from '@angular/forms';
   styleUrls: ['./digital-camera-lucida.component.css']
 })
 export class DigitalCameraLucidaComponent implements OnInit {
+  // Common properties
   public controlsCollapsed = false;
+  public selectedTemplate: string = 'none';
+  public guideColor: string = '#0000FF';
+
+  // ViewChild elements
+  @ViewChild('videoElement') videoElement!: ElementRef<HTMLVideoElement>;
+  @ViewChild('overlayContainer') overlayContainer!: ElementRef<HTMLDivElement>;
+  @ViewChild('guideContainer') guideContainer!: ElementRef<HTMLDivElement>;
+
+  // Image state
   public imageUrl: string | ArrayBuffer | null = null;
   public opacity: number = 0.5;
   public preserveAspectRatio = true;
-  public selectedTemplate: string = 'none';
-
-  @ViewChild('videoElement') videoElement: ElementRef<HTMLVideoElement> | undefined;
-  @ViewChild('overlayContainer') overlayContainer: ElementRef<HTMLDivElement> | undefined;
-
-  // Image state
-  public posX = 0;
-  public posY = 0;
+  public imagePosX = 0;
+  public imagePosY = 0;
   private imageAspectRatio = 1;
 
-  // Dragging state
-  private isDragging = false;
-  private initialMouseX = 0;
-  private initialMouseY = 0;
-  private initialPosX = 0;
-  private initialPosY = 0;
+  // Guide state
+  public preserveGuideAspectRatio = true;
+  public smartAlignment = false;
+  public guidePosX = 50;
+  public guidePosY = 50;
+  public guideWidth = 300; // Initial size
+  public guideHeight = 300;
+  private guideAspectRatio = 1;
 
-  // Resizing state
+  // Dragging/Resizing state
+  private dragTarget: 'image' | 'guide' | null = null;
+  private isDragging = false;
   private isResizing = false;
   private resizeHandle: string | null = null;
+  private initialMouseX = 0;
+  private initialMouseY = 0;
+  private initialTargetX = 0;
+  private initialTargetY = 0;
   private initialWidth = 0;
   private initialHeight = 0;
 
@@ -92,33 +104,44 @@ export class DigitalCameraLucidaComponent implements OnInit {
 
       container.style.width = `${newWidth}px`;
       container.style.height = `${newHeight}px`;
-      this.posX = (videoWidth - newWidth) / 2;
-      this.posY = (videoHeight - newHeight) / 2;
-      container.style.transform = `translate(${this.posX}px, ${this.posY}px)`;
+      this.imagePosX = (videoWidth - newWidth) / 2;
+      this.imagePosY = (videoHeight - newHeight) / 2;
     }
   }
 
-  onDragStart(event: MouseEvent) {
+  onDragStart(event: MouseEvent, target: 'image' | 'guide') {
     if (this.isResizing) return;
     this.isDragging = true;
+    this.dragTarget = target;
     this.initialMouseX = event.clientX;
     this.initialMouseY = event.clientY;
-    this.initialPosX = this.posX;
-    this.initialPosY = this.posY;
+    if (target === 'image') {
+      this.initialTargetX = this.imagePosX;
+      this.initialTargetY = this.imagePosY;
+    } else {
+      this.initialTargetX = this.guidePosX;
+      this.initialTargetY = this.guidePosY;
+    }
     event.preventDefault();
   }
 
-  onResizeStart(event: MouseEvent, handle: string) {
+  onResizeStart(event: MouseEvent, handle: string, target: 'image' | 'guide') {
     this.isResizing = true;
     this.resizeHandle = handle;
+    this.dragTarget = target;
     this.initialMouseX = event.clientX;
     this.initialMouseY = event.clientY;
-    if (this.overlayContainer) {
-      const container = this.overlayContainer.nativeElement;
-      this.initialWidth = container.offsetWidth;
-      this.initialHeight = container.offsetHeight;
-      this.initialPosX = this.posX;
-      this.initialPosY = this.posY;
+
+    const container = target === 'image' ? this.overlayContainer.nativeElement : this.guideContainer.nativeElement;
+    this.initialWidth = container.offsetWidth;
+    this.initialHeight = container.offsetHeight;
+
+    if (target === 'image') {
+      this.initialTargetX = this.imagePosX;
+      this.initialTargetY = this.imagePosY;
+    } else {
+      this.initialTargetX = this.guidePosX;
+      this.initialTargetY = this.guidePosY;
     }
     event.stopPropagation();
     event.preventDefault();
@@ -126,55 +149,67 @@ export class DigitalCameraLucidaComponent implements OnInit {
 
   @HostListener('document:mousemove', ['$event'])
   onMouseMove(event: MouseEvent) {
-    if (this.isDragging) {
-      const dx = event.clientX - this.initialMouseX;
-      const dy = event.clientY - this.initialMouseY;
-      this.posX = this.initialPosX + dx;
-      this.posY = this.initialPosY + dy;
-    } else if (this.isResizing && this.overlayContainer) {
-      const dx = event.clientX - this.initialMouseX;
-      const dy = event.clientY - this.initialMouseY;
-      const container = this.overlayContainer.nativeElement;
+    if (!this.dragTarget) return;
 
+    const dx = event.clientX - this.initialMouseX;
+    const dy = event.clientY - this.initialMouseY;
+
+    if (this.isDragging) {
+      const newPosX = this.initialTargetX + dx;
+      const newPosY = this.initialTargetY + dy;
+      if (this.dragTarget === 'image') {
+        this.imagePosX = newPosX;
+        this.imagePosY = newPosY;
+      } else {
+        this.guidePosX = newPosX;
+        this.guidePosY = newPosY;
+      }
+    } else if (this.isResizing) {
       let newWidth = this.initialWidth;
       let newHeight = this.initialHeight;
-      let newPosX = this.posX;
-      let newPosY = this.posY;
+      let newPosX = this.dragTarget === 'image' ? this.imagePosX : this.guidePosX;
+      let newPosY = this.dragTarget === 'image' ? this.imagePosY : this.guidePosY;
 
-      if (this.resizeHandle?.includes('right')) {
-        newWidth = this.initialWidth + dx;
-      }
+      if (this.resizeHandle?.includes('right')) newWidth = this.initialWidth + dx;
       if (this.resizeHandle?.includes('left')) {
         newWidth = this.initialWidth - dx;
-        newPosX = this.initialPosX + dx;
+        newPosX = this.initialTargetX + dx;
       }
-      if (this.resizeHandle?.includes('bottom')) {
-        newHeight = this.initialHeight + dy;
-      }
+      if (this.resizeHandle?.includes('bottom')) newHeight = this.initialHeight + dy;
       if (this.resizeHandle?.includes('top')) {
         newHeight = this.initialHeight - dy;
-        newPosY = this.initialPosY + dy;
+        newPosY = this.initialTargetY + dy;
       }
 
-      if (this.preserveAspectRatio) {
+      const aspectRatio = this.dragTarget === 'image' ? this.imageAspectRatio : this.guideAspectRatio;
+      
+      if ((this.dragTarget === 'image' && this.preserveAspectRatio) || (this.dragTarget === 'guide' && this.preserveGuideAspectRatio)) {
         if (this.resizeHandle?.includes('left') || this.resizeHandle?.includes('right')) {
-          newHeight = newWidth / this.imageAspectRatio;
+          newHeight = newWidth / aspectRatio;
         } else {
-          newWidth = newHeight * this.imageAspectRatio;
+          newWidth = newHeight * aspectRatio;
         }
-        // Recalculate position to keep corner under cursor
         if (this.resizeHandle?.includes('left')) {
-            newPosX = this.initialPosX + (this.initialWidth - newWidth);
+            newPosX = this.initialTargetX + (this.initialWidth - newWidth);
         }
         if (this.resizeHandle?.includes('top')) {
-            newPosY = this.initialPosY + (this.initialHeight - newHeight);
+            newPosY = this.initialTargetY + (this.initialHeight - newHeight);
         }
       }
 
-      container.style.width = `${newWidth}px`;
-      container.style.height = `${newHeight}px`;
-      this.posX = newPosX;
-      this.posY = newPosY;
+      if (this.dragTarget === 'image') {
+        this.imagePosX = newPosX;
+        this.imagePosY = newPosY;
+        if (this.overlayContainer) {
+            this.overlayContainer.nativeElement.style.width = `${newWidth}px`;
+            this.overlayContainer.nativeElement.style.height = `${newHeight}px`;
+        }
+      } else {
+        this.guidePosX = newPosX;
+        this.guidePosY = newPosY;
+        this.guideWidth = newWidth;
+        this.guideHeight = newHeight;
+      }
     }
   }
 
@@ -182,6 +217,35 @@ export class DigitalCameraLucidaComponent implements OnInit {
   onMouseUp() {
     this.isDragging = false;
     this.isResizing = false;
+    this.dragTarget = null;
     this.resizeHandle = null;
+  }
+
+  onTemplateChange(template: string) {
+    switch (template) {
+      case 'golden-ratio':
+        this.guideAspectRatio = 1.618;
+        break;
+      case 'golden-section':
+        this.guideAspectRatio = 1.618;
+        break;
+      case 'golden-triangle':
+        this.guideAspectRatio = 100 / 95.1;
+        break;
+      default:
+        this.guideAspectRatio = 1;
+        break;
+    }
+    // Reset guide size and position when template changes
+    this.guideWidth = 300;
+    this.guideHeight = this.guideWidth / this.guideAspectRatio;
+    if (this.videoElement) {
+        this.guidePosX = (this.videoElement.nativeElement.clientWidth - this.guideWidth) / 2;
+        this.guidePosY = (this.videoElement.nativeElement.clientHeight - this.guideHeight) / 2;
+    }
+  }
+
+  removeImage() {
+    this.imageUrl = null;
   }
 }
