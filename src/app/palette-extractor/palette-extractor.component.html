@@ -41,8 +41,7 @@
         <div class="mb-2">
           <label for="color-model" class="block mb-1">Modelo de Color</label>
           <select id="color-model" [(ngModel)]="colorModel" class="w-full rounded py-1 px-2 bg-gray-700 border border-gray-600">
-            <option value="rgb">RGB</option>
-            <option value="cmyk">CMYK</option>
+            <option *ngFor="let model of colorModelsOptions" [value]="model.value">{{ model.name }}</option>
           </select>
         </div>
         <div>

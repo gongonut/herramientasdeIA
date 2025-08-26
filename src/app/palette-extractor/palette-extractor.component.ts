@@ -20,7 +20,12 @@ export class PaletteExtractorComponent {
   public controlsCollapsed = false;
   public isWebcamOn = false;
   public imageSrc: string | null = null;
-  public colorModel: 'rgb' | 'cmyk' = 'rgb';
+  public colorModelsOptions: { name: string, value: 'rgb' | 'cmyk' | 'ryb' }[] = [
+    { name: 'RGB', value: 'rgb' },
+    { name: 'CMYK', value: 'cmyk' },
+    { name: 'RYB', value: 'ryb' }
+  ];
+  public colorModel: 'rgb' | 'cmyk' | 'ryb' = 'rgb';
   public paletteSize = 8;
   public palette: ColorResult[] = [];
   public isLoading = false;
@@ -182,6 +187,9 @@ export class PaletteExtractorComponent {
       if (this.colorModel === 'cmyk') {
         const cmyk = this.rgbToCmyk(r, g, b);
         displayCode = `CMYK(${cmyk.c}%, ${cmyk.m}%, ${cmyk.y}%, ${cmyk.k}%)`;
+      } else if (this.colorModel === 'ryb') {
+        const ryb = this.rgbToRyb(r, g, b);
+        displayCode = `RYB(${ryb.r}, ${ryb.y}, ${ryb.b})`;
       } else {
         displayCode = `RGB(${r}, ${g}, ${b})`;
       }
@@ -212,5 +220,41 @@ export class PaletteExtractorComponent {
     y = Math.round(((y - k) / (1 - k)) * 100);
 
     return { c, m, y, k: Math.round(k * 100) };
+  }
+
+  private rgbToRyb(r: number, g: number, b: number): { r: number, y: number, b: number } {
+    // Normalize RGB to 0-1 range
+    const R = r / 255;
+    const G = g / 255;
+    const B = b / 255;
+
+    // Remove the white (grey) from the color
+    const w = Math.min(R, G, B);
+    const R_ = R - w;
+    const G_ = G - w;
+    const B_ = B - w;
+
+    // Get the yellow from the green and red
+    const Y_ = Math.min(R_, G_);
+    const R__ = R_ - Y_;
+    const G__ = G_ - Y_;
+
+    // At this point, R__ and G__ are either 0 or positive.
+    // R__ is the amount of red that is not yellow.
+    // G__ is the amount of green that is not yellow.
+
+    // Now, map the remaining green to blue, and red to red.
+    // This is a simplified mapping.
+    const B__ = B_ + G__; // Add remaining green to blue
+    const R_final = R__;
+    const Y_final = Y_;
+    const B_final = B__;
+
+    // Scale back to 0-255 range
+    return {
+      r: Math.round(R_final * 255),
+      y: Math.round(Y_final * 255),
+      b: Math.round(B_final * 255)
+    };
   }
 }
