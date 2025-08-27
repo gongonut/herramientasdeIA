@@ -111,6 +111,10 @@ export class PerspectiveGridComponent implements AfterViewInit {
     canvas.addEventListener('mousemove', this.onMouseMove.bind(this));
     canvas.addEventListener('mouseup', this.onMouseUp.bind(this));
     canvas.addEventListener('wheel', this.onWheel.bind(this));
+
+    canvas.addEventListener('touchstart', this.onTouchStart.bind(this));
+    canvas.addEventListener('touchmove', this.onTouchMove.bind(this));
+    canvas.addEventListener('touchend', this.onTouchEnd.bind(this));
   }
 
   @HostListener('document:click', ['$event'])
@@ -872,6 +876,27 @@ export class PerspectiveGridComponent implements AfterViewInit {
       const mouseY = touch.clientY - rect.top;
       const worldPos = this.screenToWorld(mouseX, mouseY);
 
+      if (this.selectedAspectRatio !== 'none') {
+        for (let i = 0; i < this.framePoints.length; i++) {
+          const fp = this.framePoints[i];
+          const distance = Math.sqrt(Math.pow(fp.x - worldPos.x, 2) + Math.pow(fp.y - worldPos.y, 2));
+          if (distance < (20 / this.scale)) { // Increased touch area
+            this.draggingFramePointIndex = i;
+            this.canvasElement.nativeElement.classList.add('dragging');
+            event.preventDefault();
+            return;
+          }
+        }
+
+        if (this.isPointInFrame(worldPos)) {
+          this.isDraggingFrame = true;
+          this.lastFrameDragPosition = worldPos;
+          this.canvasElement.nativeElement.classList.add('dragging');
+          event.preventDefault();
+          return;
+        }
+      }
+
       let pointFound = false;
       this.vanishingPoints.forEach((vp, index) => {
         const distance = Math.sqrt(Math.pow(vp.x - worldPos.x, 2) + Math.pow(vp.y - worldPos.y, 2));
@@ -899,17 +924,75 @@ export class PerspectiveGridComponent implements AfterViewInit {
   onTouchMove(event: TouchEvent) {
     if (event.touches.length === 1) {
       const touch = event.touches[0];
+      const rect = this.canvasElement.nativeElement.getBoundingClientRect();
+      const mouseX = touch.clientX - rect.left;
+      const mouseY = touch.clientY - rect.top;
+      const worldPos = this.screenToWorld(mouseX, mouseY);
+
       if (this.isPanning) {
         const dx = touch.clientX - this.lastPanPosition.x;
         const dy = touch.clientY - this.lastPanPosition.y;
         this.panX += dx;
         this.panY += dy;
         this.lastPanPosition = { x: touch.clientX, y: touch.clientY };
-      } else if (this.draggingPointIndex > -1) {
-        const rect = this.canvasElement.nativeElement.getBoundingClientRect();
-        const mouseX = touch.clientX - rect.left;
-        const mouseY = touch.clientY - rect.top;
-        const worldPos = this.screenToWorld(mouseX, mouseY);
+        return;
+      }
+
+      if (this.isDraggingFrame) {
+        const dx = worldPos.x - this.lastFrameDragPosition.x;
+        const dy = worldPos.y - this.lastFrameDragPosition.y;
+
+        this.framePoints.forEach(p => {
+          p.x += dx;
+          p.y += dy;
+        });
+
+        this.lastFrameDragPosition = worldPos;
+        return;
+      }
+
+      if (this.draggingFramePointIndex > -1) {
+        if (this.framePoints.length === 4) {
+          const center = {
+            x: (this.framePoints[0].x + this.framePoints[1].x + this.framePoints[2].x + this.framePoints[3].x) / 4,
+            y: (this.framePoints[0].y + this.framePoints[1].y + this.framePoints[2].y + this.framePoints[3].y) / 4
+          };
+
+          const originalPointToDrag = this.framePoints[this.draggingFramePointIndex];
+
+          const originalVector = {
+            x: originalPointToDrag.x - center.x,
+            y: originalPointToDrag.y - center.y
+          };
+
+          const newVector = {
+            x: worldPos.x - center.x,
+            y: worldPos.y - center.y
+          };
+
+          const originalDist = Math.sqrt(originalVector.x * originalVector.x + originalVector.y * originalVector.y);
+          const newDist = Math.sqrt(newVector.x * newVector.x + newVector.y * newVector.y);
+
+          if (originalDist > 0) {
+            const scale = newDist / originalDist;
+            const originalPoints = JSON.parse(JSON.stringify(this.framePoints));
+
+            this.framePoints.forEach((point, index) => {
+              const vector = {
+                x: originalPoints[index].x - center.x,
+                y: originalPoints[index].y - center.y
+              };
+              this.framePoints[index] = {
+                x: center.x + vector.x * scale,
+                y: center.y + vector.y * scale
+              };
+            });
+          }
+        }
+        return;
+      }
+
+      if (this.draggingPointIndex > -1) {
         const point = this.vanishingPoints[this.draggingPointIndex];
 
         if (point.isAnchored && point.initialXOffset !== null) {
@@ -971,6 +1054,8 @@ export class PerspectiveGridComponent implements AfterViewInit {
 
   onTouchEnd(event: TouchEvent) {
     this.draggingPointIndex = -1;
+    this.draggingFramePointIndex = -1;
+    this.isDraggingFrame = false;
     this.isPanning = false;
     this.canvasElement.nativeElement.classList.remove('dragging', 'panning');
     if (event.touches.length < 2) {
