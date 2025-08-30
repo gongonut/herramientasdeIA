@@ -34,7 +34,7 @@ export class PaletteExtractorComponent implements OnDestroy {
   public scale = 1;
   public panX = 0;
   public panY = 0;
-  private isPanning = false;
+  public isPanning = false;
   private lastPanPosition = { x: 0, y: 0 };
   private initialPinchDistance = 0;
 
