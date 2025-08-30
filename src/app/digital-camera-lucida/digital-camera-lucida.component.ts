@@ -1,4 +1,4 @@
-import { Component, ElementRef, OnInit, ViewChild, HostListener } from '@angular/core';
+import { Component, ElementRef, OnInit, ViewChild, HostListener, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -10,7 +10,7 @@ import { FormsModule } from '@angular/forms';
   templateUrl: './digital-camera-lucida.component.html',
   styleUrls: ['./digital-camera-lucida.component.css']
 })
-export class DigitalCameraLucidaComponent implements OnInit {
+export class DigitalCameraLucidaComponent implements OnInit, OnDestroy {
   // Common properties
   public controlsCollapsed = false;
   public selectedTemplate: string = 'none';
@@ -53,10 +53,16 @@ export class DigitalCameraLucidaComponent implements OnInit {
   private initialHeight = 0;
   private initialPinchDistance: number = 0;
 
+  public videoDevices: MediaDeviceInfo[] = [];
+  public selectedDeviceId: string = '';
+  private videoStream!: MediaStream;
+
   constructor(private elementRef: ElementRef, private router: Router) {}
 
   ngOnInit(): void {
-    this.startCamera();
+    this.getVideoDevices().then(() => {
+      this.startCamera();
+    });
     const navigation = this.router.getCurrentNavigation();
     const state = navigation?.extras.state as { image: string };
     if (state && state.image) {
@@ -67,6 +73,12 @@ export class DigitalCameraLucidaComponent implements OnInit {
         setTimeout(() => this.resetImageState(), 0);
       };
       img.src = state.image;
+    }
+  }
+
+  ngOnDestroy(): void {
+    if (this.videoStream) {
+      this.videoStream.getTracks().forEach(track => track.stop());
     }
   }
 
@@ -84,18 +96,85 @@ export class DigitalCameraLucidaComponent implements OnInit {
     }
   }
 
-  startCamera() {
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      navigator.mediaDevices.getUserMedia({ video: true })
-        .then(stream => {
-          if (this.videoElement) {
-            this.videoElement.nativeElement.srcObject = stream;
+  async getVideoDevices() {
+    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        this.videoDevices = devices.filter(device => device.kind === 'videoinput');
+        if (this.videoDevices.length > 0) {
+          const rearCamera = this.videoDevices.find(device => device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('rear'));
+          if (rearCamera) {
+            this.selectedDeviceId = rearCamera.deviceId;
+          } else {
+            this.selectedDeviceId = this.videoDevices[0].deviceId;
           }
-        })
-        .catch(err => {
-          console.error("Error accessing camera: ", err);
-        });
+        }
+      } catch (error) {
+        console.error('Error enumerating devices: ', error);
+      }
     }
+  }
+
+  async startCamera(deviceId?: string) {
+    if (this.videoStream) {
+      this.videoStream.getTracks().forEach(track => track.stop());
+    }
+
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        const constraints: MediaStreamConstraints = {
+          video: {}
+        };
+
+        if (deviceId) {
+          (constraints.video as MediaTrackConstraints).deviceId = { exact: deviceId };
+        } else {
+            (constraints.video as MediaTrackConstraints).facingMode = 'environment';
+        }
+
+        this.videoStream = await navigator.mediaDevices.getUserMedia(constraints);
+        if (this.videoElement) {
+            this.videoElement.nativeElement.srcObject = this.videoStream;
+        }
+        
+        if (!deviceId) {
+            const currentTrack = this.videoStream.getVideoTracks()[0];
+            const currentSettings = currentTrack.getSettings();
+            if (currentSettings.deviceId) {
+                this.selectedDeviceId = currentSettings.deviceId;
+                const deviceInList = this.videoDevices.find(d => d.deviceId === this.selectedDeviceId);
+                if (!deviceInList) {
+                    await this.getVideoDevices();
+                }
+            }
+        }
+
+      } catch (error) {
+        console.error("Error accessing camera: ", error);
+        if ((error as any).name === 'OverconstrainedError' || (error as any).name === 'NotFoundError') {
+            try {
+                const fallbackConstraints: MediaStreamConstraints = { video: true };
+                this.videoStream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+                if (this.videoElement) {
+                    this.videoElement.nativeElement.srcObject = this.videoStream;
+                }
+                const currentTrack = this.videoStream.getVideoTracks()[0];
+                const currentSettings = currentTrack.getSettings();
+                if (currentSettings.deviceId) {
+                    this.selectedDeviceId = currentSettings.deviceId;
+                }
+            } catch (fallbackError) {
+                console.error("Error accessing fallback camera: ", fallbackError);
+            }
+        }
+      }
+    }
+  }
+
+  onCameraChange(event: Event) {
+    const deviceId = (event.target as HTMLSelectElement).value;
+    this.selectedDeviceId = deviceId;
+    this.startCamera(deviceId);
   }
 
   onFileSelected(event: Event): void {

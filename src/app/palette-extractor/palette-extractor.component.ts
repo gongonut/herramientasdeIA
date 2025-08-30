@@ -1,12 +1,13 @@
-import { Component, ViewChild, ElementRef, HostListener } from '@angular/core';
+import { Component, ViewChild, ElementRef, HostListener, OnDestroy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { extractColors } from 'extract-colors';
 
-interface ColorResult {
-  hex: string;
-  displayCode: string;
-  percentage: number;
+interface ColorPalette {
+  primaryColors: { rgb: string[]; cmyk: string[]; };
+  secondaryColors: { rgb: string[]; cmyk: string[]; };
+  extractedColors: { hex: string; rgb: string; cmyk: string; }[];
 }
 
 @Component({
@@ -16,19 +17,26 @@ interface ColorResult {
   templateUrl: './palette-extractor.component.html',
   styleUrls: ['./palette-extractor.component.css']
 })
-export class PaletteExtractorComponent {
+export class PaletteExtractorComponent implements OnDestroy {
   public controlsCollapsed = false;
   public isWebcamOn = false;
   public imageSrc: string | null = null;
-  public colorModelsOptions: { name: string, value: 'rgb' | 'cmyk' | 'ryb' }[] = [
+  public colorModelsOptions: { name: string, value: 'rgb' | 'cmyk' }[] = [
     { name: 'RGB', value: 'rgb' },
-    { name: 'CMYK', value: 'cmyk' },
-    { name: 'RYB', value: 'ryb' }
+    { name: 'CMYK', value: 'cmyk' }
   ];
-  public colorModel: 'rgb' | 'cmyk' | 'ryb' = 'rgb';
+  public colorModel: 'rgb' | 'cmyk' = 'rgb';
   public paletteSize = 8;
-  public palette: ColorResult[] = [];
   public isLoading = false;
+  public colorPalette: ColorPalette | null = null;
+
+  // --- Pan & Zoom State ---
+  public scale = 1;
+  public panX = 0;
+  public panY = 0;
+  private isPanning = false;
+  private lastPanPosition = { x: 0, y: 0 };
+  private initialPinchDistance = 0;
 
   @ViewChild('videoElement') videoElement?: ElementRef<HTMLVideoElement>;
   @ViewChild('canvasElement') canvasElement?: ElementRef<HTMLCanvasElement>;
@@ -37,18 +45,26 @@ export class PaletteExtractorComponent {
   @ViewChild('toggleButton') toggleButton?: ElementRef;
 
   private stream: MediaStream | null = null;
+  public videoDevices: MediaDeviceInfo[] = [];
+  public selectedDeviceId: string = '';
 
-  constructor(private elementRef: ElementRef) {}
+  constructor() {}
+
+  ngOnDestroy(): void {
+    this.stopWebcam();
+  }
+
+  resetView(): void {
+    this.scale = 1;
+    this.panX = 0;
+    this.panY = 0;
+  }
 
   @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent): void {
-    if (this.controlsCollapsed) {
-      return;
-    }
+    if (this.controlsCollapsed) return;
     const target = event.target as HTMLElement;
-    if (this.toggleButton?.nativeElement.contains(target)) {
-      return;
-    }
+    if (this.toggleButton?.nativeElement.contains(target)) return;
     if (this.controlsPanel && !this.controlsPanel.nativeElement.contains(target)) {
       this.controlsCollapsed = true;
     }
@@ -60,6 +76,8 @@ export class PaletteExtractorComponent {
       const reader = new FileReader();
       reader.onload = (e) => {
         this.imageSrc = e.target?.result as string;
+        this.colorPalette = null;
+        this.resetView();
         this.stopWebcam();
       };
       reader.readAsDataURL(input.files[0]);
@@ -70,24 +88,60 @@ export class PaletteExtractorComponent {
     if (this.isWebcamOn) {
       this.stopWebcam();
     } else {
-      this.startWebcam();
+      this.getVideoDevices().then(() => this.startWebcam());
     }
   }
 
-  startWebcam(): void {
-    this.imageSrc = null;
-    this.isWebcamOn = true;
-    navigator.mediaDevices.getUserMedia({ video: true })
-      .then(stream => {
-        this.stream = stream;
-        if (this.videoElement) {
-          this.videoElement.nativeElement.srcObject = stream;
+  async getVideoDevices() {
+    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        this.videoDevices = devices.filter(device => device.kind === 'videoinput');
+        if (this.videoDevices.length > 0) {
+          const rearCamera = this.videoDevices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('rear'));
+          this.selectedDeviceId = rearCamera ? rearCamera.deviceId : this.videoDevices[0].deviceId;
         }
-      })
-      .catch(err => {
-        console.error("Error accessing webcam: ", err);
-        this.isWebcamOn = false;
-      });
+      } catch (error) {
+        console.error('Error enumerating devices: ', error);
+      }
+    }
+  }
+
+  async startWebcam(deviceId?: string) {
+    this.imageSrc = null;
+    this.colorPalette = null;
+    this.isWebcamOn = true;
+    this.resetView();
+
+    if (this.stream) {
+      this.stream.getTracks().forEach(track => track.stop());
+    }
+
+    const constraints: MediaStreamConstraints = { video: {} };
+    if (deviceId) {
+      (constraints.video as MediaTrackConstraints).deviceId = { exact: deviceId };
+    } else {
+      (constraints.video as MediaTrackConstraints).facingMode = 'environment';
+    }
+
+    try {
+      this.stream = await navigator.mediaDevices.getUserMedia(constraints);
+      if (this.videoElement) {
+        this.videoElement.nativeElement.srcObject = this.stream;
+      }
+      const currentTrack = this.stream.getVideoTracks()[0];
+      if (currentTrack.getSettings().deviceId) {
+        this.selectedDeviceId = currentTrack.getSettings().deviceId!;
+      }
+    } catch (error) {
+      console.error("Error accessing camera: ", error);
+      this.isWebcamOn = false;
+    }
+  }
+
+  onCameraChange(event: Event) {
+    const deviceId = (event.target as HTMLSelectElement).value;
+    this.startWebcam(deviceId);
   }
 
   stopWebcam(): void {
@@ -108,153 +162,153 @@ export class PaletteExtractorComponent {
       if (context) {
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
         this.imageSrc = canvas.toDataURL('image/png');
+        this.colorPalette = null;
+        this.resetView();
         this.stopWebcam();
       }
     }
   }
 
   async analyzeImage(): Promise<void> {
-    if (!this.imageSrc || (!this.imageElement && !this.videoElement)) return;
-
+    if (!this.imageSrc) return;
     this.isLoading = true;
-    this.palette = [];
+    this.colorPalette = null;
+    this.resetView();
 
-    // Use a timeout to allow the UI to update and show the loading indicator
-    setTimeout(() => {
-      try {
-        const pixels = this.getPixels();
-        if (!pixels) {
-          this.isLoading = false;
-          return;
-        }
-        const colorMap = this.quantize(pixels, this.paletteSize);
-        this.generatePalette(colorMap);
-      } catch (error) {
-        console.error('Error analyzing image:', error);
-      }
+    try {
+      const colors = await extractColors(this.imageSrc, { pixels: 64000 });
+      const extracted = colors.slice(0, this.paletteSize).map(c => ({
+        hex: c.hex,
+        rgb: `rgb(${c.red}, ${c.green}, ${c.blue})`,
+        cmyk: this.rgbToCmyk(c.red, c.green, c.blue)
+      }));
+
+      this.colorPalette = {
+        primaryColors: {
+          rgb: ['rgb(255, 0, 0)', 'rgb(0, 255, 0)', 'rgb(0, 0, 255)'],
+          cmyk: ['cmyk(0, 100, 100, 0)', 'cmyk(100, 0, 100, 0)', 'cmyk(100, 100, 0, 0)']
+        },
+        secondaryColors: {
+          rgb: ['rgb(255, 255, 0)', 'rgb(255, 0, 255)', 'rgb(0, 255, 255)'],
+          cmyk: ['cmyk(0, 0, 100, 0)', 'cmyk(0, 100, 0, 0)', 'cmyk(100, 0, 0, 0)']
+        },
+        extractedColors: extracted
+      };
+    } catch (error) {
+      console.error('Error al extraer la paleta de colores:', error);
+    } finally {
       this.isLoading = false;
-    }, 100);
-  }
-
-  private getPixels(): Uint8ClampedArray | null {
-    if (!this.canvasElement || !this.imageElement?.nativeElement) return null;
-
-    const canvas = this.canvasElement.nativeElement;
-    const context = canvas.getContext('2d');
-    const img = this.imageElement.nativeElement;
-
-    if (!context || !img.src) return null;
-
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-    context.drawImage(img, 0, 0);
-
-    return context.getImageData(0, 0, canvas.width, canvas.height).data;
-  }
-
-  private quantize(pixels: Uint8ClampedArray, maxColors: number): Map<string, number> {
-    const colorMap = new Map<string, number>();
-    for (let i = 0; i < pixels.length; i += 4) {
-      // Downsample colors to reduce the number of unique colors
-      const r = Math.round(pixels[i] / 32) * 32;
-      const g = Math.round(pixels[i + 1] / 32) * 32;
-      const b = Math.round(pixels[i + 2] / 32) * 32;
-      const alpha = pixels[i + 3];
-
-      if (alpha < 128) continue; // Skip transparent pixels
-
-      const key = `${r},${g},${b}`;
-      colorMap.set(key, (colorMap.get(key) || 0) + 1);
     }
+  }
 
-    const sortedColors = Array.from(colorMap.entries()).sort((a, b) => b[1] - a[1]);
-    const dominantColors = new Map<string, number>();
-    for (let i = 0; i < Math.min(sortedColors.length, maxColors); i++) {
-        dominantColors.set(sortedColors[i][0], sortedColors[i][1]);
+  // --- Event Handlers for Pan & Zoom ---
+
+  onMouseDown(event: MouseEvent): void {
+    if (event.button !== 0 || !this.imageSrc) return;
+    this.isPanning = true;
+    this.lastPanPosition = { x: event.clientX, y: event.clientY };
+    event.preventDefault();
+  }
+
+  @HostListener('document:mousemove', ['$event'])
+  onMouseMove(event: MouseEvent): void {
+    if (!this.isPanning) return;
+    const dx = event.clientX - this.lastPanPosition.x;
+    const dy = event.clientY - this.lastPanPosition.y;
+    this.panX += dx;
+    this.panY += dy;
+    this.lastPanPosition = { x: event.clientX, y: event.clientY };
+  }
+
+  @HostListener('document:mouseup')
+  onMouseUp(): void {
+    this.isPanning = false;
+  }
+
+  onWheel(event: WheelEvent): void {
+    if (!this.imageSrc) return;
+    event.preventDefault();
+    const scaleAmount = 1.1;
+    const mousePoint = { x: event.offsetX, y: event.offsetY };
+    const newScale = event.deltaY < 0 ? this.scale * scaleAmount : this.scale / scaleAmount;
+    const scaleFactor = newScale / this.scale;
+    this.panX = mousePoint.x - (mousePoint.x - this.panX) * scaleFactor;
+    this.panY = mousePoint.y - (mousePoint.y - this.panY) * scaleFactor;
+    this.scale = newScale;
+  }
+
+  onTouchStart(event: TouchEvent): void {
+    if (!this.imageSrc) return;
+    event.preventDefault();
+    if (event.touches.length === 1) {
+      this.isPanning = true;
+      this.lastPanPosition = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+    } else if (event.touches.length === 2) {
+      this.isPanning = false;
+      this.initialPinchDistance = this.getDistance(event.touches);
     }
-
-    return dominantColors;
   }
 
-  private generatePalette(colorMap: Map<string, number>): void {
-    const totalPixels = Array.from(colorMap.values()).reduce((sum, count) => sum + count, 0);
-    this.palette = Array.from(colorMap.entries()).map(([color, count]) => {
-      const [r, g, b] = color.split(',').map(Number);
-      const percentage = (count / totalPixels) * 100;
-      const hex = this.rgbToHex(r, g, b);
-      let displayCode = hex;
-
-      if (this.colorModel === 'cmyk') {
-        const cmyk = this.rgbToCmyk(r, g, b);
-        displayCode = `CMYK(${cmyk.c}%, ${cmyk.m}%, ${cmyk.y}%, ${cmyk.k}%)`;
-      } else if (this.colorModel === 'ryb') {
-        const ryb = this.rgbToRyb(r, g, b);
-        displayCode = `RYB(${ryb.r}, ${ryb.y}, ${ryb.b})`;
-      } else {
-        displayCode = `RGB(${r}, ${g}, ${b})`;
-      }
-
-      return { hex, displayCode, percentage };
-    }).sort((a, b) => b.percentage - a.percentage);
+  @HostListener('document:touchmove', ['$event'])
+  onTouchMove(event: TouchEvent): void {
+    if (!this.imageSrc) return;
+    event.preventDefault();
+    if (event.touches.length === 1 && this.isPanning) {
+      const dx = event.touches[0].clientX - this.lastPanPosition.x;
+      const dy = event.touches[0].clientY - this.lastPanPosition.y;
+      this.panX += dx;
+      this.panY += dy;
+      this.lastPanPosition = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+    } else if (event.touches.length === 2) {
+      if (this.initialPinchDistance <= 0) return;
+      const newDist = this.getDistance(event.touches);
+      const scaleFactor = newDist / this.initialPinchDistance;
+      const rect = (event.target as HTMLElement).getBoundingClientRect();
+      const center = {
+        x: ((event.touches[0].clientX + event.touches[1].clientX) / 2) - rect.left,
+        y: ((event.touches[0].clientY + event.touches[1].clientY) / 2) - rect.top
+      };
+      this.panX = center.x - (center.x - this.panX) * scaleFactor;
+      this.panY = center.y - (center.y - this.panY) * scaleFactor;
+      this.scale *= scaleFactor;
+      this.initialPinchDistance = newDist;
+    }
   }
 
-  private rgbToHex(r: number, g: number, b: number): string {
-    return '#' + [r, g, b].map(x => {
-      const hex = x.toString(16);
-      return hex.length === 1 ? '0' + hex : hex;
-    }).join('');
+  @HostListener('document:touchend', ['$event'])
+  onTouchEnd(event: TouchEvent): void {
+    this.isPanning = false;
+    if (event.touches.length < 2) {
+      this.initialPinchDistance = 0;
+    }
   }
 
-  private rgbToCmyk(r: number, g: number, b: number): { c: number, m: number, y: number, k: number } {
+  private getDistance(touches: TouchList): number {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+
+  // --- Color Conversion ---
+
+  rgbToCmyk(r: number, g: number, b: number): string {
+    if (r === 0 && g === 0 && b === 0) return 'cmyk(0, 0, 0, 100)';
     let c = 1 - (r / 255);
     let m = 1 - (g / 255);
     let y = 1 - (b / 255);
     const k = Math.min(c, m, y);
-
-    if (k === 1) {
-      return { c: 0, m: 0, y: 0, k: 100 };
-    }
-
-    c = Math.round(((c - k) / (1 - k)) * 100);
-    m = Math.round(((m - k) / (1 - k)) * 100);
-    y = Math.round(((y - k) / (1 - k)) * 100);
-
-    return { c, m, y, k: Math.round(k * 100) };
+    c = ((c - k) / (1 - k)) * 100;
+    m = ((m - k) / (1 - k)) * 100;
+    y = ((y - k) / (1 - k)) * 100;
+    return `cmyk(${Math.round(c)}, ${Math.round(m)}, ${Math.round(y)}, ${Math.round(k * 100)})`;
   }
 
-  private rgbToRyb(r: number, g: number, b: number): { r: number, y: number, b: number } {
-    // Normalize RGB to 0-1 range
-    const R = r / 255;
-    const G = g / 255;
-    const B = b / 255;
-
-    // Remove the white (grey) from the color
-    const w = Math.min(R, G, B);
-    const R_ = R - w;
-    const G_ = G - w;
-    const B_ = B - w;
-
-    // Get the yellow from the green and red
-    const Y_ = Math.min(R_, G_);
-    const R__ = R_ - Y_;
-    const G__ = G_ - Y_;
-
-    // At this point, R__ and G__ are either 0 or positive.
-    // R__ is the amount of red that is not yellow.
-    // G__ is the amount of green that is not yellow.
-
-    // Now, map the remaining green to blue, and red to red.
-    // This is a simplified mapping.
-    const B__ = B_ + G__; // Add remaining green to blue
-    const R_final = R__;
-    const Y_final = Y_;
-    const B_final = B__;
-
-    // Scale back to 0-255 range
-    return {
-      r: Math.round(R_final * 255),
-      y: Math.round(Y_final * 255),
-      b: Math.round(B_final * 255)
-    };
+  cmykToRgb(cmyk: string): string {
+    const cmykValues = cmyk.substring(5, cmyk.length - 1).split(',').map(v => parseInt(v, 10));
+    const [c, m, y, k] = cmykValues.map(v => v / 100);
+    const r = 255 * (1 - c) * (1 - k);
+    const g = 255 * (1 - m) * (1 - k);
+    const b = 255 * (1 - y) * (1 - k);
+    return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
   }
 }

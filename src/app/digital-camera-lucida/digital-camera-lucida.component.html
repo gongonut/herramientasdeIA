@@ -94,6 +94,13 @@
         <span>Menú/Cámara Lúcida Digital</span>
       </button>
       
+      <div *ngIf="videoDevices.length > 1" class="mb-4">
+        <label for="cameraSelect" class="block mb-1">Seleccionar Cámara</label>
+        <select id="cameraSelect" [value]="selectedDeviceId" (change)="onCameraChange($event)" class="w-full rounded py-1 px-2" [ngClass]="{'bg-gray-700 border border-gray-600': true, 'bg-gray-200 border border-gray-300': false}">
+          <option *ngFor="let device of videoDevices" [value]="device.deviceId">{{ device.label }}</option>
+        </select>
+      </div>
+
       <div class="mb-4">
         <label for="image-upload" class="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded cursor-pointer inline-block text-center">
           Seleccionar archivo

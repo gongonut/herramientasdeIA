@@ -75,6 +75,9 @@ export class PerspectiveGridComponent implements AfterViewInit {
   private isDraggingFrame: boolean = false;
   private lastFrameDragPosition = { x: 0, y: 0 };
 
+  public videoDevices: MediaDeviceInfo[] = [];
+  public selectedDeviceId: string = '';
+
   get horizonRotation(): number {
     return this._horizonRotation;
   }
@@ -102,7 +105,9 @@ export class PerspectiveGridComponent implements AfterViewInit {
     const canvas = this.canvasElement.nativeElement;
     this.ctx = canvas.getContext('2d')!;
     this.setupCanvas();
-    this.startCamera();
+    this.getVideoDevices().then(() => {
+      this.startCamera();
+    });
     this.initVanishingPoints();
     this.initFramePoints();
     this.draw();
@@ -131,6 +136,20 @@ export class PerspectiveGridComponent implements AfterViewInit {
     }
   }
 
+  @HostListener('document:touchstart', ['$event'])
+  onDocumentTouch(event: TouchEvent): void {
+    if (this.gridControlsCollapsed) {
+      return;
+    }
+    const target = event.target as HTMLElement;
+    if (this.toggleButton?.nativeElement.contains(target)) {
+      return;
+    }
+    if (this.controlsPanel && !this.controlsPanel.nativeElement.contains(target)) {
+      this.gridControlsCollapsed = true;
+    }
+  }
+
   @HostListener('window:resize')
   onResize() {
     this.setupCanvas();
@@ -145,36 +164,106 @@ export class PerspectiveGridComponent implements AfterViewInit {
     canvas.width = canvas.offsetWidth;
     canvas.height = canvas.offsetHeight;
     this._horizonLevel = canvas.height / 2; // Initialize horizon in the middle of the screen
+    this.panX = canvas.width / 2;
     this.panY = this._horizonLevel;
   }
 
-  async startCamera() {
-    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+  async getVideoDevices() {
+    if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
       try {
-        this.videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
-        this.videoElement.nativeElement.srcObject = this.videoStream;
-        this.videoElement.nativeElement.play();
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        this.videoDevices = devices.filter(device => device.kind === 'videoinput');
+        if (this.videoDevices.length > 0) {
+          const rearCamera = this.videoDevices.find(device => device.label.toLowerCase().includes('back') || device.label.toLowerCase().includes('rear'));
+          if (rearCamera) {
+            this.selectedDeviceId = rearCamera.deviceId;
+          } else {
+            this.selectedDeviceId = this.videoDevices[0].deviceId;
+          }
+        }
       } catch (error) {
-        console.error("Error accessing camera: ", error);
-        this.showCamera = false;
+        console.error('Error enumerating devices: ', error);
       }
     }
   }
 
-  toggleCamera() {
-    this.showCamera = !this.showCamera;
-    if (this.showCamera) {
-      this.startCamera();
-    } else {
-      if (this.videoStream) {
-        this.videoStream.getTracks().forEach(track => track.stop());
+  async startCamera(deviceId?: string) {
+    if (this.videoStream) {
+      this.videoStream.getTracks().forEach(track => track.stop());
+    }
+
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        const constraints: MediaStreamConstraints = {
+          video: {}
+        };
+
+        if (deviceId) {
+          (constraints.video as MediaTrackConstraints).deviceId = { exact: deviceId };
+        } else {
+            (constraints.video as MediaTrackConstraints).facingMode = 'environment';
+        }
+
+        this.videoStream = await navigator.mediaDevices.getUserMedia(constraints);
+        this.videoElement.nativeElement.srcObject = this.videoStream;
+        this.videoElement.nativeElement.play();
+        
+        if (!deviceId) {
+            const currentTrack = this.videoStream.getVideoTracks()[0];
+            const currentSettings = currentTrack.getSettings();
+            if (currentSettings.deviceId) {
+                this.selectedDeviceId = currentSettings.deviceId;
+                const deviceInList = this.videoDevices.find(d => d.deviceId === this.selectedDeviceId);
+                if (!deviceInList) {
+                    await this.getVideoDevices();
+                }
+            }
+        }
+
+      } catch (error) {
+        console.error("Error accessing camera: ", error);
+        if ((error as any).name === 'OverconstrainedError' || (error as any).name === 'NotFoundError') {
+            try {
+                const fallbackConstraints: MediaStreamConstraints = { video: true };
+                this.videoStream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+                this.videoElement.nativeElement.srcObject = this.videoStream;
+                this.videoElement.nativeElement.play();
+                const currentTrack = this.videoStream.getVideoTracks()[0];
+                const currentSettings = currentTrack.getSettings();
+                if (currentSettings.deviceId) {
+                    this.selectedDeviceId = currentSettings.deviceId;
+                }
+            } catch (fallbackError) {
+                console.error("Error accessing fallback camera: ", fallbackError);
+                this.showCamera = false;
+            }
+        } else {
+            this.showCamera = false;
+        }
       }
     }
+  }
+
+  onCameraChange(event: Event) {
+    const deviceId = (event.target as HTMLSelectElement).value;
+    this.selectedDeviceId = deviceId;
+    this.startCamera(deviceId);
   }
 
   initVanishingPoints() {
     if (this.vanishingPoints.length === 0) {
-      this.addPerspectivePoint();
+      const newPoint: VanishingPoint = {
+        id: this.nextPointId++,
+        x: 0,
+        y: 0,
+        color: this.getRandomColor(),
+        isAnchored: true,
+        initialXOffset: 0,
+        pairId: null,
+        curvature: 0.5
+      };
+      this.vanishingPoints.push(newPoint);
+      this.selectPoint(newPoint.id);
     }
   }
 
@@ -221,7 +310,7 @@ export class PerspectiveGridComponent implements AfterViewInit {
   addHorizonVPPair() {
     const { width } = this.canvasElement.nativeElement;
     const pairId = this.nextPairId++;
-    const worldCenter = { x: 0, y: this._horizonLevel };
+    const worldCenter = { x: 0, y: 0 };
     const p1Offset = -width * 0.25;
     const p2Offset = width * 0.25;
 
@@ -254,7 +343,7 @@ export class PerspectiveGridComponent implements AfterViewInit {
 
   addPerpendicularVPPair() {
     const pairId = this.nextPairId++;
-    const worldCenter = { x: 0, y: this._horizonLevel };
+    const worldCenter = { x: 0, y: 0 };
     const p1Offset = -200;
     const p2Offset = 200;
 
@@ -344,7 +433,7 @@ export class PerspectiveGridComponent implements AfterViewInit {
   }
 
   toggleAnchor(point: VanishingPoint) {
-    const worldCenter = { x: 0, y: this._horizonLevel };
+    const worldCenter = { x: 0, y: 0 };
     if (point.isAnchored) {
       point.initialXOffset = point.x - worldCenter.x;
       this.updateConstrainedPointsPosition();
@@ -354,7 +443,7 @@ export class PerspectiveGridComponent implements AfterViewInit {
   }
 
   updateConstrainedPointsPosition() {
-    const worldCenter = { x: 0, y: this._horizonLevel };
+    const worldCenter = { x: 0, y: 0 };
     const angle = (this.horizonRotation * Math.PI) / 180;
 
     this.vanishingPoints.forEach(point => {
@@ -513,33 +602,32 @@ export class PerspectiveGridComponent implements AfterViewInit {
   }
 
   recordFrame() {
-    const dataUrl = this.getFrameImageDataUrl();
+    let dataUrl: string | null;
+    if (this.selectedAspectRatio !== 'none') {
+      dataUrl = this.getFrameImageDataUrl();
+    } else {
+      dataUrl = this.canvasElement.nativeElement.toDataURL('image/png');
+    }
+
     if (dataUrl) {
       const link = document.createElement('a');
       link.href = dataUrl;
-      link.download = 'perspective-frame.png';
+      link.download = 'perspective-drawing.png';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
     }
   }
 
-  shareFrame() {
-    const dataUrl = this.getFrameImageDataUrl();
-    if (dataUrl) {
-      this.router.navigate(['/camara-lucida-digital'], { state: { image: dataUrl } });
-    }
-  }
+  
 
   drawGrid() {
     const { width, height } = this.canvasElement.nativeElement;
     const angle = (this.horizonRotation * Math.PI) / 180;
-    const worldCenter = { x: 0, y: this._horizonLevel };
 
     this.ctx.save();
     this.ctx.strokeStyle = '#FFFF00';
     this.ctx.lineWidth = 2 / this.scale;
-    this.ctx.translate(worldCenter.x, worldCenter.y);
     this.ctx.rotate(angle);
     this.ctx.beginPath();
     const worldWidth = width / this.scale;
@@ -575,7 +663,6 @@ export class PerspectiveGridComponent implements AfterViewInit {
         this.ctx.strokeStyle = '#FF00FF';
         this.ctx.lineWidth = 1 / this.scale;
         this.ctx.globalAlpha = 0.5;
-        this.ctx.translate(worldCenter.x, worldCenter.y);
         this.ctx.rotate(angle);
         this.ctx.beginPath();
         const worldHeight = height/this.scale;
@@ -801,7 +888,7 @@ export class PerspectiveGridComponent implements AfterViewInit {
 
       if (point.isAnchored && point.initialXOffset !== null) {
         const angle = (this.horizonRotation * Math.PI) / 180;
-        const worldCenter = { x: 0, y: this._horizonLevel };
+        const worldCenter = { x: 0, y: 0 };
 
         const dx = worldPos.x - worldCenter.x;
         const dy = worldPos.y - worldCenter.y;
@@ -811,7 +898,7 @@ export class PerspectiveGridComponent implements AfterViewInit {
 
       } else if (point.isPerpendicular && point.perpendicularOffset != null) {
         const angle = (this.horizonRotation * Math.PI) / 180;
-        const worldCenter = { x: 0, y: this._horizonLevel };
+        const worldCenter = { x: 0, y: 0 };
 
         const dx = worldPos.x - worldCenter.x;
         const dy = worldPos.y - worldCenter.y;
@@ -997,7 +1084,7 @@ export class PerspectiveGridComponent implements AfterViewInit {
 
         if (point.isAnchored && point.initialXOffset !== null) {
           const angle = (this.horizonRotation * Math.PI) / 180;
-          const worldCenter = { x: 0, y: this._horizonLevel };
+          const worldCenter = { x: 0, y: 0 };
 
           const dx = worldPos.x - worldCenter.x;
           const dy = worldPos.y - worldCenter.y;
@@ -1007,7 +1094,7 @@ export class PerspectiveGridComponent implements AfterViewInit {
 
         } else if (point.isPerpendicular && point.perpendicularOffset != null) {
           const angle = (this.horizonRotation * Math.PI) / 180;
-          const worldCenter = { x: 0, y: this._horizonLevel };
+          const worldCenter = { x: 0, y: 0 };
 
           const dx = worldPos.x - worldCenter.x;
           const dy = worldPos.y - worldCenter.y;
@@ -1063,6 +1150,10 @@ export class PerspectiveGridComponent implements AfterViewInit {
     }
   }
 
+  toggleCamera() {
+    this.showCamera = !this.showCamera;
+  }
+
   toggleTheme() {
     this.theme = this.theme === 'light' ? 'dark' : 'light';
   }
@@ -1078,12 +1169,10 @@ export class PerspectiveGridComponent implements AfterViewInit {
   drawParallelLines() {
     const { width, height } = this.canvasElement.nativeElement;
     const angle = (this.horizonRotation * Math.PI) / 180;
-    const worldCenter = { x: 0, y: this._horizonLevel };
 
     this.ctx.save();
     this.ctx.strokeStyle = '#00FFFF';
     this.ctx.lineWidth = 1 / this.scale;
-    this.ctx.translate(worldCenter.x, worldCenter.y);
     this.ctx.rotate(angle);
 
     const worldHeight = height / this.scale;
@@ -1105,12 +1194,10 @@ export class PerspectiveGridComponent implements AfterViewInit {
   drawPerpendicularLines() {
     const { width, height } = this.canvasElement.nativeElement;
     const angle = (this.horizonRotation * Math.PI) / 180;
-    const worldCenter = { x: 0, y: this._horizonLevel };
 
     this.ctx.save();
     this.ctx.strokeStyle = '#FF00FF';
     this.ctx.lineWidth = 1 / this.scale;
-    this.ctx.translate(worldCenter.x, worldCenter.y);
     this.ctx.rotate(angle);
 
     const worldWidth = width / this.scale;

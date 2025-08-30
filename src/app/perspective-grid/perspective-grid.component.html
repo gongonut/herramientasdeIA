@@ -112,16 +112,17 @@
         </div>
         <div class="flex mt-2 space-x-2">
           <button (click)="recordFrame()" 
-                  *ngIf="selectedAspectRatio !== 'none'"
-                  class="w-1/2 bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
-            Grabar
-          </button>
-          <button (click)="shareFrame()" 
-                  *ngIf="selectedAspectRatio !== 'none'"
-                  class="w-1/2 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
-            Compartir
+                  class="w-full bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
+            {{ selectedAspectRatio !== 'none' ? 'Grabar Marco' : 'Grabar Pantalla' }}
           </button>
         </div>
+      </div>
+
+      <div *ngIf="videoDevices.length > 1" class="mb-4">
+        <label for="cameraSelect" class="block mb-1">Seleccionar Cámara</label>
+        <select id="cameraSelect" [value]="selectedDeviceId" (change)="onCameraChange($event)" class="w-full rounded py-1 px-2" [ngClass]="{'bg-gray-700 border border-gray-600': theme === 'dark', 'bg-gray-200 border border-gray-300': theme === 'light'}">
+          <option *ngFor="let device of videoDevices" [value]="device.deviceId">{{ device.label }}</option>
+        </select>
       </div>
 
       <button (click)="toggleCamera()" class="w-full bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mb-2">

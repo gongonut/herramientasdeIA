@@ -2,40 +2,33 @@
   <!-- Controls Panel -->
   <div class="absolute top-4 left-4 z-20">
     <button #toggleButton (click)="controlsCollapsed = !controlsCollapsed" class="bg-opacity-75 p-2 rounded-full mb-2" [ngClass]="{'bg-gray-800 text-white': true, 'bg-white text-black shadow-lg': false}">
-      <svg *ngIf="controlsCollapsed" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-      </svg>
-      <svg *ngIf="!controlsCollapsed" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-      </svg>
+      <svg *ngIf="controlsCollapsed" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" /></svg>
+      <svg *ngIf="!controlsCollapsed" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
     </button>
 
     <div #controlsPanel *ngIf="!controlsCollapsed" class="bg-opacity-75 p-4 rounded-lg w-80" [ngClass]="{'bg-gray-800 text-white': true, 'bg-white text-black shadow-lg': false}">
       <button routerLink="/" class="flex items-center text-lg font-bold mb-4 w-full text-left p-2 rounded-lg shadow-md bg-gray-700 hover:bg-gray-600 text-white">
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-        </svg>
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
         <span>Extractor de Paletas</span>
       </button>
 
-      <!-- Image Source -->
       <div class="mb-4">
         <p class="font-bold mb-2">Fuente de Imagen</p>
         <div class="flex space-x-2">
-          <label for="image-upload" class="flex-1 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded cursor-pointer inline-block text-center">
-            Subir Archivo
-          </label>
+          <label for="image-upload" class="flex-1 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded cursor-pointer inline-block text-center">Subir Archivo</label>
           <input id="image-upload" type="file" (change)="onFileSelected($event)" accept="image/*" class="hidden">
-          <button (click)="toggleWebcam()" class="flex-1 bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
-            {{ isWebcamOn ? 'Apagar Cámara' : 'Usar Cámara' }}
-          </button>
+          <button (click)="toggleWebcam()" class="flex-1 bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">{{ isWebcamOn ? 'Apagar Cámara' : 'Usar Cámara' }}</button>
         </div>
-        <button *ngIf="isWebcamOn" (click)="captureSnapshot()" class="w-full mt-2 bg-indigo-500 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded">
-          Capturar Foto
-        </button>
+        <button *ngIf="isWebcamOn" (click)="captureSnapshot()" class="w-full mt-2 bg-indigo-500 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded">Capturar Foto</button>
       </div>
 
-      <!-- Analysis Configuration -->
+      <div *ngIf="videoDevices.length > 1" class="mb-4">
+        <label for="cameraSelect" class="block mb-1">Seleccionar Cámara</label>
+        <select id="cameraSelect" [value]="selectedDeviceId" (change)="onCameraChange($event)" class="w-full rounded py-1 px-2 bg-gray-700 border border-gray-600">
+          <option *ngFor="let device of videoDevices" [value]="device.deviceId">{{ device.label }}</option>
+        </select>
+      </div>
+
       <div class="mb-4">
         <p class="font-bold mb-2">Configuración de Análisis</p>
         <div class="mb-2">
@@ -50,37 +43,61 @@
         </div>
       </div>
 
-      <!-- Analyze Button -->
-      <button (click)="analyzeImage()" [disabled]="!imageSrc" class="w-full bg-purple-600 hover:bg-purple-800 text-white font-bold py-2 px-4 rounded disabled:bg-gray-500 disabled:cursor-not-allowed">
-        Analizar Imagen
-      </button>
+      <button (click)="analyzeImage()" [disabled]="!imageSrc" class="w-full bg-purple-600 hover:bg-purple-800 text-white font-bold py-2 px-4 rounded disabled:bg-gray-500 disabled:cursor-not-allowed">Analizar Imagen</button>
     </div>
   </div>
 
   <!-- Main Content -->
   <div class="flex-1 flex flex-col items-center justify-center p-4 ml-0 md:ml-80">
     <!-- Image/Webcam Display -->
-    <div class="w-full max-w-4xl mb-4 bg-gray-200 dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
-      <div *ngIf="!imageSrc && !isWebcamOn" class="flex items-center justify-center h-96">
-        <p class="text-gray-500">Sube una imagen o activa la cámara</p>
+    <div class="w-full max-w-4xl h-96 mb-4 bg-gray-700 rounded-lg shadow-lg overflow-hidden relative"
+         [class.cursor-grab]="imageSrc" [class.cursor-grabbing]="isPanning"
+         (wheel)="onWheel($event)"
+         (mousedown)="onMouseDown($event)"
+         (touchstart)="onTouchStart($event)"
+         (touchmove)="onTouchMove($event)"
+         (touchend)="onTouchEnd($event)">
+
+      <div *ngIf="!imageSrc && !isWebcamOn" class="flex items-center justify-center h-full">
+        <p class="text-gray-400">Sube una imagen o activa la cámara</p>
       </div>
-      <img #imageElement *ngIf="imageSrc" [src]="imageSrc" class="w-full h-auto max-h-[60vh] object-contain">
-      <video #videoElement *ngIf="isWebcamOn" autoplay playsinline class="w-full h-auto"></video>
+
+      <div *ngIf="imageSrc" class="absolute top-0 left-0 w-full h-full"
+           [style.transform]="'translate(' + panX + 'px, ' + panY + 'px) scale(' + scale + ')'">
+        <img #imageElement [src]="imageSrc" class="w-full h-full object-contain" (dragstart)="$event.preventDefault()">
+      </div>
+
+      <video #videoElement *ngIf="isWebcamOn" autoplay playsinline class="w-full h-full object-cover"></video>
     </div>
 
+    <!-- Loading Indicator -->
+    <div *ngIf="isLoading" class="flex items-center justify-center h-96"><p class="text-gray-500">Analizando imagen...</p></div>
+
     <!-- Results -->
-    <div *ngIf="palette.length > 0" class="w-full max-w-4xl bg-gray-200 dark:bg-gray-800 p-4 rounded-lg shadow-lg">
-      <h3 class="text-xl font-bold mb-4">Paleta de Colores Resultante</h3>
-      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        <div *ngFor="let color of palette" class="flex flex-col items-center">
+    <div *ngIf="colorPalette && !isLoading" class="w-full max-w-4xl bg-gray-800 p-4 rounded-lg shadow-lg">
+      <h3 class="text-xl font-bold mb-4">Paleta Extraída</h3>
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-6">
+        <div *ngFor="let color of colorPalette.extractedColors" class="flex flex-col items-center">
           <div class="w-20 h-20 rounded-md mb-2 shadow-md" [style.background-color]="color.hex"></div>
-          <p class="font-mono text-sm">{{ color.displayCode }}</p>
-          <p class="text-xs font-bold">{{ color.percentage | number:'1.2-2' }}%</p>
+          <p class="font-mono text-sm text-center">{{ colorModel === 'rgb' ? color.rgb : color.cmyk }}</p>
         </div>
       </div>
-    </div>
-    <div *ngIf="isLoading" class="flex items-center justify-center h-96">
-        <p class="text-gray-500">Analizando imagen...</p>
+
+      <h3 class="text-xl font-bold mb-4">Colores Primarios ({{ colorModel | uppercase }})</h3>
+      <div class="grid grid-cols-3 gap-4 mb-6">
+        <div *ngFor="let color of (colorModel === 'rgb' ? colorPalette.primaryColors.rgb : colorPalette.primaryColors.cmyk)" class="flex flex-col items-center">
+          <div class="w-20 h-20 rounded-md mb-2 shadow-md" [style.background-color]="colorModel === 'rgb' ? color : cmykToRgb(color)"></div>
+          <p class="font-mono text-sm text-center">{{ color }}</p>
+        </div>
+      </div>
+
+      <h3 class="text-xl font-bold mb-4">Colores Secundarios ({{ colorModel | uppercase }})</h3>
+      <div class="grid grid-cols-3 gap-4">
+        <div *ngFor="let color of (colorModel === 'rgb' ? colorPalette.secondaryColors.rgb : colorPalette.secondaryColors.cmyk)" class="flex flex-col items-center">
+          <div class="w-20 h-20 rounded-md mb-2 shadow-md" [style.background-color]="colorModel === 'rgb' ? color : cmykToRgb(color)"></div>
+          <p class="font-mono text-sm text-center">{{ color }}</p>
+        </div>
+      </div>
     </div>
   </div>
 
